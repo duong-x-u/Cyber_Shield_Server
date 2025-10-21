@@ -66,9 +66,10 @@ async def call_gas_db_ai(text: str):
         timeout = aiohttp.ClientTimeout(total=20)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(APPS_SCRIPT_URL, json=payload) as resp:
+            resp_json = await resp.json(content_type=None)
                 if resp.status == 200:
                     print("✅ [Leo] Nhận được phản hồi thành công từ GAS.")
-                    return await resp.json()
+                    return resp.json()
                 else:
                     error_text = await resp.text()
                     print(f"🔴 [Leo] Lỗi từ GAS. Trạng thái: {resp.status}, Phản hồi: {error_text}")
@@ -116,6 +117,7 @@ Follow strictly the 3-step framework:
 
 * Core question: "Is this from a stranger with malicious intent, or just friends joking/venting?"  
 * Default assumption: Treat all conversations as **friendly and harmless**, unless there is undeniable evidence otherwise.  
+* Notice: Ignore messages related to game hacking.
 * Actions:  
     * **Language:** If negative words can be used jokingly, sarcastically, or casually → treat as SAFE.  
     * **Emotion:** If it’s just venting, exaggeration, or temporary anger without targeting someone specifically → SAFE.  
@@ -176,7 +178,7 @@ async def perform_full_analysis(text: str, urls: list):
     is_new_case_by_anna = False
     context_hint_from_leo = None
     
-    print(f"📜 [Bắt đầu] Phân tích tin nhắn: '{text[:4000]}'")
+    print(f"📜 [Bắt đầu] Phân tích tin nhắn: '{text[:400]}'")
     print("➡️ [Luồng 1] Bắt đầu gọi Điệp viên Leo (GAS)...")
     gas_result = await call_gas_db_ai(text)
 
@@ -256,3 +258,5 @@ async def analyze_text():
 async def health_check():
 
     return jsonify({'status': 'Bình thường', 'architecture': 'Trivial Filter + Blacklist (AI) + Context Hints + Anna-AI'})
+
+
