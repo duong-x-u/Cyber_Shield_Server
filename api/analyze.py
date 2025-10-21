@@ -66,9 +66,10 @@ async def call_gas_db_ai(text: str):
         timeout = aiohttp.ClientTimeout(total=20)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(APPS_SCRIPT_URL, json=payload) as resp:
+            resp_json = await resp.json(content_type=None)
                 if resp.status == 200:
                     print("✅ [Leo] Nhận được phản hồi thành công từ GAS.")
-                    return await resp.json()
+                    return resp.json()
                 else:
                     error_text = await resp.text()
                     print(f"🔴 [Leo] Lỗi từ GAS. Trạng thái: {resp.status}, Phản hồi: {error_text}")
@@ -257,4 +258,5 @@ async def analyze_text():
 async def health_check():
 
     return jsonify({'status': 'Bình thường', 'architecture': 'Trivial Filter + Blacklist (AI) + Context Hints + Anna-AI'})
+
 
