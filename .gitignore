@@ -1,0 +1,20 @@
+# Môi trường ảo Python
+venv/
+.venv/
+
+# Model cache
+models/
+
+# File OpSec (CỰC KỲ QUAN TRỌNG)
+.env
+secrets/
+token.json
+credentials.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Windows/macOS junk
+.DS_Store
+Thumbs.db
