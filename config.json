@@ -1,0 +1,6 @@
+{
+  "analysis_provider": "AUTO",
+  "enable_email_alerts": true,
+  "pre_filter_model_id": "openai/gpt-3.5-turbo",
+  "_comment":"analysis_provider: OFF, CHATGPT, GEMINI, AUTO; enable_email_alerts: true/false"
+}

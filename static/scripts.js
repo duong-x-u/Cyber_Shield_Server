@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function performAnalysis(text) {
         setControlsDisabled(true);
-        analyzeBtn.innerHTML = '<div class="loader-small"></div> Đang phân tích...';
+        analyzeBtn.innerHTML = '<div class="loader-small"></div> CHỜ XÍU...';
         resultCardContainer.className = 'loading'; // Thêm class để CSS hiển thị
         resultCard.innerHTML = '<div class="loader"></div><p style="text-align:center; margin-top:1rem;">Đang kết nối tới Anna-AI...</p>';
 
