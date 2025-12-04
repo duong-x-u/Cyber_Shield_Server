@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Cyber Shield</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Admin Dashboard</h1>
+        <a href="{{ url_for('admin.logout') }}">Logout</a>
+    </header>
+
+    <div class="container">
+        <div class="card" style="margin-bottom: 2rem;">
+            <h2>System Status</h2>
+            <div class="metrics-grid">
+                <div class="metric-item">
+                    <h3>CPU</h3>
+                    <p class="value"><span id="cpu-value">--</span>%</p>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" id="cpu-progress"></div>
+                    </div>
+                </div>
+                <div class="metric-item">
+                    <h3>RAM</h3>
+                    <p class="value"><span id="ram-value">--</span>%</p>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" id="ram-progress"></div>
+                    </div>
+                </div>
+                <div class="metric-item">
+                    <h3>Disk</h3>
+                    <p class="value"><span id="disk-value">--</span>%</p>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" id="disk-progress"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Configuration Editor (config.json)</h2>
+            <p>Chỉnh sửa các cài đặt động cho ứng dụng. Thay đổi sẽ có hiệu lực ngay lập tức.</p>
+            <textarea id="config-editor" rows="10"></textarea>
+            <div class="button-container">
+                <button id="save-config-btn">Lưu Config</button>
+            </div>
+            <div id="config-status-message"></div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <h2>File Editor</h2>
+            <div class="file-editor-layout">
+                <div id="file-browser">
+                    <p>Loading files...</p>
+                </div>
+                <div id="file-content-editor">
+                    <p><strong>Current file:</strong> <span id="current-filepath">No file selected.</span></p>
+                    <textarea id="file-editor" rows="20" placeholder="Select a file from the list to view its content."></textarea>
+                    <div class="button-container">
+                        <button id="save-file-btn">Lưu File</button>
+                    </div>
+                    <div id="file-status-message"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='admin.js') }}"></script>
+</body>
+</html>

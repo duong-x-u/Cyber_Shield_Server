@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - ACCESS DENIED</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', 'Courier', monospace;
+            background: #0a0e27;
+            color: #00ff00;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Animated background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    rgba(0, 255, 0, 0.03) 0px,
+                    rgba(0, 255, 0, 0.03) 1px,
+                    transparent 1px,
+                    transparent 2px
+                );
+            pointer-events: none;
+            z-index: -1;
+            animation: scanlines 8s linear infinite;
+        }
+
+        @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(10px); }
+        }
+
+        /* Matrix rain effect */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 50%, rgba(0, 255, 0, 0.05) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(0, 255, 150, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: glitch-text 3s infinite;
+        }
+
+        @keyframes glitch-text {
+            0%, 100% { text-shadow: 0 0 10px rgba(0, 255, 0, 0.8); }
+            50% { text-shadow: 0 0 20px rgba(0, 255, 0, 0.6), 0 0 30px rgba(0, 255, 150, 0.4); }
+        }
+
+        .terminal-title {
+            font-size: 14px;
+            color: #00ff00;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            opacity: 0.8;
+        }
+
+        .ascii-art {
+            font-size: 11px;
+            line-height: 1.2;
+            color: #00ff00;
+            margin-bottom: 20px;
+            text-align: center;
+            white-space: pre;
+            overflow-x: auto;
+            animation: flicker 0.15s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.95; }
+        }
+
+        .main-content {
+            border: 2px solid #00ff00;
+            background: rgba(0, 20, 0, 0.8);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 
+                0 0 10px rgba(0, 255, 0, 0.3),
+                inset 0 0 10px rgba(0, 255, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .main-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ff00, transparent);
+            animation: scan-line 4s linear infinite;
+        }
+
+        @keyframes scan-line {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .error-code {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { text-shadow: 0 0 10px rgba(0, 255, 0, 0.8); }
+            50% { text-shadow: 0 0 20px rgba(0, 255, 0, 1), 0 0 30px rgba(0, 255, 150, 0.6); }
+        }
+
+        .error-message {
+            font-size: 14px;
+            line-height: 1.8;
+            margin-bottom: 20px;
+            color: #00ff00;
+        }
+
+        .error-message p {
+            margin-bottom: 10px;
+        }
+
+        .status-bar {
+            background: rgba(0, 255, 0, 0.1);
+            border-top: 1px solid #00ff00;
+            border-bottom: 1px solid #00ff00;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 12px;
+            color: #00ff00;
+        }
+
+        .status-item {
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .status-label {
+            color: #00ff00;
+            opacity: 0.7;
+        }
+
+        .status-value {
+            color: #00ff00;
+            font-weight: bold;
+            animation: blink 1s infinite;
+        }
+
+        .status-value.blink {
+            animation: blink 0.7s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 12px;
+        }
+
+        .data-table th,
+        .data-table td {
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            padding: 10px;
+            text-align: left;
+            color: #00ff00;
+        }
+
+        .data-table th {
+            background: rgba(0, 255, 0, 0.1);
+            border-bottom: 2px solid #00ff00;
+            font-weight: bold;
+        }
+
+        .data-table tr:hover {
+            background: rgba(0, 255, 0, 0.05);
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 12px;
+            line-height: 1.6;
+            overflow-x: auto;
+            color: #00ff00;
+        }
+
+        .code-line {
+            margin-bottom: 5px;
+        }
+
+        .code-line::before {
+            content: '> ';
+            color: #00ff00;
+            opacity: 0.5;
+            margin-right: 8px;
+        }
+
+        .command {
+            color: #00ffff;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 30px 0;
+        }
+
+        .btn {
+            background: transparent;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            padding: 12px 25px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 255, 0, 0.1);
+            transition: left 0.3s ease;
+            z-index: -1;
+        }
+
+        .btn:hover {
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8), inset 0 0 20px rgba(0, 255, 0, 0.1);
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+        }
+
+        .btn:hover::before {
+            left: 0;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #00ff00;
+            opacity: 0.6;
+            margin-top: 30px;
+            border-top: 1px solid rgba(0, 255, 0, 0.3);
+            padding-top: 20px;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 14px;
+            background: #00ff00;
+            margin-left: 5px;
+            animation: blink-cursor 1s infinite;
+        }
+
+        @keyframes blink-cursor {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .typing-text {
+            display: inline;
+        }
+
+        /* Matrix characters falling */
+        .matrix-char {
+            position: fixed;
+            color: #00ff00;
+            font-size: 20px;
+            opacity: 0.1;
+            pointer-events: none;
+            font-weight: bold;
+            z-index: 0;
+        }
+
+        @media (max-width: 600px) {
+            .error-code {
+                font-size: 36px;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .action-buttons {
+                gap: 10px;
+            }
+
+            .btn {
+                padding: 10px 15px;
+                font-size: 11px;
+            }
+
+            .data-table {
+                font-size: 11px;
+            }
+
+            .data-table th,
+            .data-table td {
+                padding: 8px;
+            }
+
+            .ascii-art {
+                font-size: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="terminal-title">
+                ███████████ SYSTEM ALERT ███████████
+            </div>
+            <div class="ascii-art">
+  ___  _   _  ___ ___ 
+ / _ \| | | |/ _ \/ __|
+| (_) | |_| | (_) \__ \
+ \__\_\\___/\___/|___/
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="error-code">404</div>
+            
+            <div class="error-message">
+                <p>⚠ ACCESS DENIED - PAGE NOT FOUND ⚠</p>
+                <p>Trang bạn yêu cầu không tồn tại trong hệ thống.</p>
+                <p>Đây có thể là một lỗi hoặc trang đã bị xóa.</p>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">[REQUEST_ID]</span>
+                    <span class="status-value">ERR_404_NOT_FOUND</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">[TIMESTAMP]</span>
+                    <span class="status-value" id="timestamp"></span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">[STATUS]</span>
+                    <span class="status-value blink">SEARCHING...</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">[CONNECTION]</span>
+                    <span class="status-value">ACTIVE</span>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-line"><span class="command">$ curl</span> http://server/404</div>
+                <div class="code-line"><span class="command">Response:</span> ERROR_PAGE_NOT_FOUND</div>
+                <div class="code-line"><span class="command">$ traceroute</span> path/to/page</div>
+                <div class="code-line"><span class="command">Result:</span> [FAILED] - No route to host</div>
+            </div>
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Protocol</th>
+                        <th>Status</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>HTTP/1.1</td>
+                        <td>404</td>
+                        <td>Not Found</td>
+                    </tr>
+                    <tr>
+                        <td>DNS</td>
+                        <td>TIMEOUT</td>
+                        <td>No page resolved</td>
+                    </tr>
+                    <tr>
+                        <td>CACHE</td>
+                        <td>EMPTY</td>
+                        <td>No cached data</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="action-buttons">
+                <button class="btn" onclick="goHome()">⇢ Về Trang Chủ</button>
+                <button class="btn" onclick="goBack()">⇠ Quay Lại</button>
+                <button class="btn" onclick="reload()">⟳ Làm Mới</button>
+            </div>
+
+            <div class="footer">
+                Auto-redirect to homepage in <span id="timer" style="font-weight: bold;">10</span>s
+                <div style="margin-top: 10px; opacity: 0.5;">
+                    System Status: Online | Security Level: High
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate random matrix characters
+        function generateMatrixChars() {
+            const chars = '01ｦｬｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾘﾙﾚﾛﾜﾝ';
+            const container = document.body;
+            
+            for (let i = 0; i < 15; i++) {
+                const char = document.createElement('div');
+                char.className = 'matrix-char';
+                char.textContent = chars[Math.floor(Math.random() * chars.length)];
+                char.style.left = Math.random() * 100 + '%';
+                char.style.top = Math.random() * 100 + '%';
+                char.style.animation = `fall ${3 + Math.random() * 4}s linear infinite`;
+                container.appendChild(char);
+            }
+        }
+
+        // Update timestamp
+        function updateTimestamp() {
+            const now = new Date();
+            const timeString = now.toLocaleString('vi-VN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('timestamp').textContent = timeString;
+        }
+
+        // Countdown timer
+        let timeLeft = 10;
+        function startCountdown() {
+            updateTimestamp();
+            const timer = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    goHome();
+                }
+            }, 1000);
+        }
+
+        // Navigation functions
+        function goHome() {
+            window.location.href = '/';
+        }
+
+        function goBack() {
+            window.history.back();
+        }
+
+        function reload() {
+            window.location.reload();
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                goHome();
+            }
+            if (event.key === 'Escape') {
+                goBack();
+            }
+            if (event.key === 'r' || event.key === 'R') {
+                reload();
+            }
+        });
+
+        // Initialize
+        window.addEventListener('load', function() {
+            generateMatrixChars();
+            startCountdown();
+        });
+
+        // Add CSS animation for matrix fall
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fall {
+                0% { transform: translateY(-100px); opacity: 0; }
+                10% { opacity: 0.5; }
+                90% { opacity: 0.5; }
+                100% { transform: translateY(window.innerHeight); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
