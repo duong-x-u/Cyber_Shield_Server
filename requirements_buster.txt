@@ -1,0 +1,3 @@
+# requirements_buster.txt
+httpx
+rich

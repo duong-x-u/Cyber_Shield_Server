@@ -1,6 +1,8 @@
 {
-  "analysis_provider": "AUTO",
+  "_comment": "analysis_provider: OFF, CHATGPT, GEMINI, AUTO; enable_email_alerts: true/false",
+  "analysis_provider": "CHATGPT",
+  "chatgpt_model_id": "google/gemini-2.5-flash-lite",
   "enable_email_alerts": true,
-  "pre_filter_model_id": "openai/gpt-3.5-turbo",
-  "_comment":"analysis_provider: OFF, CHATGPT, GEMINI, AUTO; enable_email_alerts: true/false"
+  "gemini_model_id": "gemini-2.5-flash-lite",
+  "pre_filter_model_id": "openai/gpt-3.5-turbo"
 }
