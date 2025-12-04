@@ -5,10 +5,11 @@ import random
 from bytez import Bytez
 import aiohttp
 import asyncio
+from api.utils import get_dynamic_config # NEW IMPORT
 
 # --- Cấu hình API Keys (Hỗ trợ xoay vòng) ---
 BYTEZ_API_KEYS_STR = os.environ.get('BYTEZ_API_KEY')
-CHATGPT_MODEL_ID = os.environ.get('CHATGPT_MODEL_ID', 'openai/gpt-4o')
+# CHATGPT_MODEL_ID sẽ được đọc từ config.json
 
 # Xử lý chuỗi keys thành một danh sách
 if not BYTEZ_API_KEYS_STR:
@@ -99,8 +100,12 @@ async def analyze_with_chatgpt_http(text: str):
         selected_key = random.choice(BYTEZ_API_KEYS)
         print(f"➡️  [ChatGPT] Đang gửi yêu cầu (sử dụng key có 4 ký tự cuối: ...{selected_key[-4:]})")
         
+        # Đọc CHATGPT_MODEL_ID từ config.json
+        config = get_dynamic_config()
+        chatgpt_model_id = config.get('chatgpt_model_id', 'openai/gpt-4o') # Mặc định là gpt-4o
+        
         sdk = Bytez(selected_key)
-        model = sdk.model(CHATGPT_MODEL_ID)
+        model = sdk.model(chatgpt_model_id)
         
         prompt = create_chatgpt_prompt(text[:3000])
         

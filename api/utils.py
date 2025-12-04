@@ -8,8 +8,10 @@ def get_dynamic_config():
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         # Fallback nếu file không tồn tại hoặc bị lỗi
-        return {
-            "analysis_provider": "AUTO",
-            "enable_email_alerts": True,
-            "pre_filter_model_id": "openai/gpt-3.5-turbo"
-        }
+                    return {
+                        "analysis_provider": "AUTO",
+                        "enable_email_alerts": True,
+                        "pre_filter_model_id": "openai/gpt-3.5-turbo",
+                        "chatgpt_model_id": "openai/gpt-4o",
+                        "gemini_model_id": "gemini-2.5-flash-lite"
+                    }

@@ -3,6 +3,7 @@ import os
 import random
 import json
 import aiohttp
+from api.utils import get_dynamic_config # NEW IMPORT
 
 # Lấy danh sách API keys từ biến môi trường
 GOOGLE_API_KEYS_STR = os.environ.get('GOOGLE_API_KEYS')
@@ -85,7 +86,11 @@ async def analyze_with_anna_ai_http(text: str):
     Trả về một dictionary chứa kết quả hoặc thông tin lỗi.
     """
     api_key = random.choice(GOOGLE_API_KEYS)
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"    
+    # Đọc GEMINI_MODEL_ID từ config.json
+    config = get_dynamic_config()
+    gemini_model_id = config.get('gemini_model_id', 'gemini-2.5-flash-lite') # Mặc định là gemini-2.5-flash-lite
+    
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model_id}:generateContent?key={api_key}"    
     prompt = create_anna_ai_prompt(text[:3000])
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],

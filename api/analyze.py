@@ -21,12 +21,13 @@ from api.chatgpt import analyze_with_chatgpt_http
 from api.gemini import analyze_with_anna_ai_http
 from api.pre_filter import is_trivial_message
 from api.utils import get_dynamic_config # << IMPORT MỚI
+from extensions import limiter
 
 # --- Blueprint ---
 analyze_endpoint = Blueprint('analyze_endpoint', __name__)
 
 # --- Cấu hình (chỉ các secret và cấu hình tĩnh) ---
-GMAIL_TOKEN_PATH = os.environ.get('GMAIL_TOKEN_PATH', '/etc/secrets/token.json')
+GMAIL_TOKEN_PATH = os.environ.get('GMAIL_TOKEN_PATH', 'secrets/token.json')
 GOOGLE_SHEET_ID = os.environ.get('GOOGLE_SHEET_ID')
 
 # VirusTotal API Keys (hỗ trợ xoay vòng)
@@ -183,7 +184,12 @@ async def perform_full_analysis(text: str, urls_from_request: list):
 
     # --- GỬI CẢNH BÁO VÀ LƯU TRỮ ---
     if final_result.get("is_dangerous"):
-        asyncio.create_task(send_email_gmail_api("duongpham18210@gmail.com", f"[CyberShield] Nguy hiểm: {final_result.get('types', 'N/A')}", f"Tin nhắn:\n{text}\n\nPhân tích:\n{json.dumps(final_result, indent=2, ensure_ascii=False)}"))
+        print("➡️ [Phản hồi] Phát hiện ca nguy hiểm mới. Lên lịch gửi email bằng Gmail API...")
+        email_task = asyncio.create_task(send_email_gmail_api(
+            "duongpham18210@gmail.com", 
+            f"[CyberShield] Nguy hiểm: {final_result.get('types', 'N/A')}", 
+            f"Tin nhắn:\n{text}\n\nPhân tích:\n{json.dumps(final_result, indent=2, ensure_ascii=False)}"
+        ))
     
     gc.collect()
     print(f"🏁 [Kết thúc] Phân tích hoàn tất cho: '{text[:50]}...'")
@@ -191,18 +197,31 @@ async def perform_full_analysis(text: str, urls_from_request: list):
 
 # --- ENDPOINTS ---
 @analyze_endpoint.route('/analyze', methods=['POST'])
+@limiter.limit("15/minute;3/second")
 async def analyze_text():
     try:
         data = request.get_json(silent=True)
         if not data or 'text' not in data: 
             return jsonify({'error': 'Yêu cầu không hợp lệ, thiếu "text"'}), 400
+        
         text = data.get('text', '').strip()
         urls_from_request = data.get('urls', [])
-        if not text: return jsonify({'error': 'Không có văn bản để phân tích'}), 400
-        result = await perform_full_analysis(text[:3000], urls_from_request)
+
+        # --- VALIDATION: Kiểm tra độ dài của tin nhắn ---
+        MAX_TEXT_LENGTH = 5000  # Đặt giới hạn 5000 ký tự
+        if len(text) > MAX_TEXT_LENGTH:
+            return jsonify({'error': f'Tin nhắn quá dài. Giới hạn là {MAX_TEXT_LENGTH} ký tự.'}), 413 # Payload Too Large
+
+        if not text: 
+            return jsonify({'error': 'Không có văn bản để phân tích'}), 400
+        
+        # Bỏ slicing text[:3000] vì đã validate ở trên
+        result = await perform_full_analysis(text, urls_from_request)
+
         if 'error' in result:
             status_code = result.get('status_code', 500)
             return jsonify({'error': result.get('message', 'Lỗi không xác định')}), status_code
+        
         response = jsonify({'result': result})
         asyncio.create_task(save_to_history_sheet_async(text, result))
         return response
