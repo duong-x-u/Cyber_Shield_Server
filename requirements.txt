@@ -13,3 +13,4 @@ flask-limiter
 urllib3>=2.0.0.post1
 flask_sqlalchemy
 flask-socketio
+eventlet
