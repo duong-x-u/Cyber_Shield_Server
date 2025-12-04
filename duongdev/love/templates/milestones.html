@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-heart"></i> Cột mốc & Kỷ niệm</h1>
+    <p>Những ngày đặc biệt của chúng mình</p>
+</div>
+
+<!-- Upcoming milestones highlight -->
+<div class="upcoming-highlight">
+    <h2><i class="fas fa-clock"></i> Sắp đến</h2>
+    <div class="upcoming-cards">
+        {% if upcoming %}
+            {% for item in upcoming[:3] %}
+            <div class="countdown-card">
+                <div class="countdown-number">{{ item.days_left }}</div>
+                <div class="countdown-label">ngày nữa</div>
+                <div class="countdown-title">{{ item.title }}</div>
+                <div class="countdown-date">{{ item.date.strftime('%d/%m/%Y') }}</div>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add milestone -->
+<div class="add-section">
+    <button class="btn-add" id="toggleMilestoneForm">
+        <i class="fas fa-plus"></i> Thêm kỷ niệm mới
+    </button>
+    
+    <form class="add-form" id="milestoneForm" action="{{ url_for('add_milestone') }}" method="POST" style="display: none;">
+        <div class="form-group">
+            <label for="title">Tên kỷ niệm</label>
+            <input type="text" id="title" name="title" required placeholder="VD: Ngày hẹn hò đầu tiên">
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="date">Ngày</label>
+                <input type="date" id="date" name="date" required>
+            </div>
+            <div class="form-group">
+                <label for="icon">Biểu tượng</label>
+                <select id="icon" name="icon">
+                    <option value="heart">❤️ Tim</option>
+                    <option value="ring">💍 Nhẫn</option>
+                    <option value="gift">🎁 Quà</option>
+                    <option value="cake">🎂 Bánh</option>
+                    <option value="travel">✈️ Du lịch</option>
+                    <option value="home">🏠 Nhà</option>
+                    <option value="star">⭐ Sao</option>
+                    <option value="flower">🌸 Hoa</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="description">Mô tả</label>
+            <textarea id="description" name="description" rows="3" placeholder="Ghi chú thêm về ngày này..."></textarea>
+        </div>
+        
+        <div class="form-group checkbox-group">
+            <input type="checkbox" id="is_recurring" name="is_recurring">
+            <label for="is_recurring">Lặp lại hàng năm</label>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-save"></i> Lưu kỷ niệm
+            </button>
+            <button type="button" class="btn-secondary" id="cancelMilestone">Hủy</button>
+        </div>
+    </form>
+</div>
+
+<!-- Timeline -->
+<div class="timeline">
+    <div class="timeline-item special">
+        <div class="timeline-marker">💕</div>
+        <div class="timeline-content">
+            <h3>Ngày bắt đầu yêu</h3>
+            <p class="timeline-date">28/11/2025 - 15:51</p>
+            <p>Ngày mà tất cả bắt đầu...</p>
+        </div>
+    </div>
+    
+    {% if milestones %}
+        {% for milestone in milestones %}
+        <div class="timeline-item">
+            <div class="timeline-marker">
+                {% if milestone.icon == 'heart' %}❤️
+                {% elif milestone.icon == 'ring' %}💍
+                {% elif milestone.icon == 'gift' %}🎁
+                {% elif milestone.icon == 'cake' %}🎂
+                {% elif milestone.icon == 'travel' %}✈️
+                {% elif milestone.icon == 'home' %}🏠
+                {% elif milestone.icon == 'star' %}⭐
+                {% elif milestone.icon == 'flower' %}🌸
+                {% else %}💖{% endif %}
+            </div>
+            <div class="timeline-content">
+                <h3>{{ milestone.title }}</h3>
+                <p class="timeline-date">{{ milestone.date.strftime('%d/%m/%Y') }}</p>
+                {% if milestone.description %}
+                <p>{{ milestone.description }}</p>
+                {% endif %}
+                {% if milestone.is_recurring %}
+                <span class="badge">🔄 Hàng năm</span>
+                {% endif %}
+            </div>
+            <button class="btn-delete-timeline" data-delete-url="{{ url_for('delete_milestone', id=milestone.id) }}">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+<!-- Delete modal -->
+<div class="modal" id="deleteModal">
+    <div class="modal-content">
+        <h3>Xác nhận xóa</h3>
+        <p>Bạn có chắc muốn xóa kỷ niệm này không?</p>
+        <div class="modal-actions">
+            <a href="#" id="confirmDeleteBtn" class="btn-danger">Xóa</a>
+            <button type="button" class="btn-secondary" id="cancelDeleteBtn">Hủy</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Toggle form
+    document.getElementById('toggleMilestoneForm').addEventListener('click', function() {
+        var form = document.getElementById('milestoneForm');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        this.style.display = 'none';
+    });
+    
+    document.getElementById('cancelMilestone').addEventListener('click', function() {
+        document.getElementById('milestoneForm').style.display = 'none';
+        document.getElementById('toggleMilestoneForm').style.display = 'block';
+    });
+    
+    // Delete milestone
+    document.querySelectorAll('.btn-delete-timeline').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var url = this.getAttribute('data-delete-url');
+            document.getElementById('confirmDeleteBtn').href = url;
+            document.getElementById('deleteModal').classList.add('active');
+        });
+    });
+    
+    document.getElementById('cancelDeleteBtn').addEventListener('click', function() {
+        document.getElementById('deleteModal').classList.remove('active');
+    });
+    
+    document.getElementById('deleteModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.classList.remove('active');
+        }
+    });
+</script>
+{% endblock %}

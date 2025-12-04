@@ -1,0 +1,35 @@
+/* Sunset Theme */
+
+@keyframes sunset-gradient {
+	0% {
+		background-position: 0% 50%;
+	}
+	50% {
+		background-position: 100% 50%;
+	}
+	100% {
+		background-position: 0% 50%;
+	}
+}
+
+.theme-sunset .app-wrapper {
+    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+    background-size: 400% 400%;
+    animation: sunset-gradient 25s ease infinite;
+}
+
+.theme-sunset {
+    --bg-main: #231a33;
+    --bg-primary: #2a213f;
+    --bg-secondary: #3c2f4f;
+    --bg-tertiary: #4a406b;
+    --bg-hover: #594c7a;
+    --accent: #ff8c42;
+    --accent-hover: #ff792e;
+    --text-primary: #f5eafc;
+    --text-secondary: #cab9da;
+    --text-muted: #8c7d9e;
+    --received-bg: #3c2f4f;
+    --sent-bg: linear-gradient(135deg, #ff8c42, #ff5c5c);
+    --border-color: #4a406b;
+}

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chat với Minh Thy 🌸</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='1.3') }}">
+</head>
+<body class="dark-theme" data-avatar-url="{{ url_for('static', filename='avatar.png') }}">
+    <div class="app-wrapper">
+        <!-- Sidebar - Conversations -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>💬 Chats</h2>
+                <button class="btn-icon" id="newChatBtn" title="Tạo chat mới">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                </button>
+            </div>
+            <div class="conversation-list" id="conversationList">
+                <!-- Conversations rendered here -->
+            </div>
+            <div class="sidebar-footer">
+                <button class="btn-icon" id="themeToggle" title="Đổi theme">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+                </button>
+                <button class="btn-icon" id="soundToggle" title="Âm thanh">
+                    <svg class="icon-sound-on" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                    <svg class="icon-sound-off" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <div class="app-container" id="appContainer">
+            <div class="chat-wrapper">
+                <!-- Header -->
+                <header class="chat-header">
+                    <button class="btn-icon mobile-menu" id="menuToggle">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+                    </button>
+                    <div class="header-left">
+                        <div class="avatar">
+                            <img src="{{ url_for('static', filename='avatar.png') }}" class="avatar-image" alt="Avatar">
+                            <span class="online-dot"></span>
+                        </div>
+                        <div class="contact-info">
+                            <h1 class="contact-name" id="aiNickname">Minh Thy</h1>
+                            <p class="contact-status" id="statusText">Đang hoạt động</p>
+                        </div>
+                    </div>
+                    <div class="header-right">
+                        <button class="btn-icon" id="searchBtn" title="Tìm kiếm">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                        </button>
+                        <button class="btn-icon" id="moreBtn" title="Thêm">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Search Bar -->
+                <div class="search-bar" id="searchBar">
+                    <input type="text" id="searchInput" placeholder="Tìm kiếm tin nhắn...">
+                    <button class="btn-icon" id="closeSearch">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                </div>
+
+                <!-- Search Results -->
+                <div class="search-results" id="searchResults"></div>
+
+                <!-- Chat Messages -->
+                <main class="chat-area" id="chatArea">
+                    <!-- Messages will be rendered here -->
+                </main>
+
+                <!-- Scroll to bottom button -->
+                <button class="scroll-bottom-btn" id="scrollBottomBtn" title="Cuộn xuống">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </button>
+
+                <!-- Typing Indicator -->
+                <div class="typing-indicator" id="typingIndicator">
+                    <div class="typing-avatar"><span>T</span></div>
+                    <div class="typing-content"><span></span><span></span><span></span></div>
+                </div>
+
+                <!-- Reply Preview -->
+                <div class="reply-preview" id="replyPreview">
+                    <div class="reply-info">
+                        <span class="reply-label">Đang trả lời <strong id="replySender"></strong></span>
+                        <p class="reply-text" id="replyText"></p>
+                    </div>
+                    <button class="btn-icon" id="cancelReply"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+                </div>
+
+                <!-- Input Area -->
+                <footer class="input-area">
+                    <button class="btn-icon" id="emojiBtn" title="Emoji"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg></button>
+                    <div class="emoji-picker" id="emojiPicker">
+                        <div class="emoji-grid">
+                            <span>😀</span><span>😂</span><span>🥰</span><span>😍</span><span>🤩</span><span>😎</span><span>🤔</span><span>😅</span><span>😭</span><span>😤</span><span>🥺</span><span>😳</span><span>🙄</span><span>😏</span><span>😴</span><span>🤗</span><span>🤭</span><span>🤫</span><span>😱</span><span>🤡</span><span>👍</span><span>👎</span><span>👏</span><span>🙏</span><span>💪</span><span>❤️</span><span>💔</span><span>💕</span><span>✨</span><span>🔥</span><span>🌸</span><span>🌹</span><span>🎉</span><span>🎊</span><span>🥳</span><span>💀</span><span>👻</span><span>🤖</span><span>👀</span><span>💩</span>
+                        </div>
+                    </div>
+                    <div class="input-wrapper">
+                        <textarea id="messageInput" placeholder="Gửi tin nhắn đến Minh Thy" rows="1" maxlength="2000000"></textarea>
+                    </div>
+                    <button class="send-btn" id="sendBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+                </footer>
+            </div>
+
+            <!-- Settings Panel -->
+            <aside class="settings-panel" id="settingsPanel">
+                <div class="settings-header">
+                    <h2>Thông tin</h2>
+                    <button class="btn-icon" id="closeSettingsBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg></button>
+                </div>
+                <div class="settings-body">
+                    <div class="setting-item">
+                        <label>Tên cuộc trò chuyện</label>
+                        <input type="text" id="convNameInput" maxlength="30">
+                    </div>
+                    <div class="setting-item">
+                        <label>Tên AI</label>
+                        <input type="text" id="aiNameInput" maxlength="20">
+                    </div>
+                    <div class="setting-item">
+                        <label>Tên của bạn</label>
+                        <input type="text" id="userNameInput" maxlength="20">
+                    </div>
+                    <div class="setting-item">
+                        <label>Tên người yêu của bạn</label>
+                        <input type="text" id="userGirlfriendNameInput" maxlength="30">
+                    </div>
+                    <div class="setting-item">
+                        <label>🎭 Mood của AI: <span id="moodValue">70</span>%</label>
+                        <input type="range" id="moodSlider" min="0" max="100" value="70">
+                    </div>
+                    <div class="setting-item">
+                        <label>Số tin nhắn</label>
+                        <p class="setting-value" id="messageCount">0</p>
+                    </div>
+                    <div class="setting-item">
+                        <label>Chủ đề</label>
+                        <div class="theme-options">
+                            <button class="theme-btn" data-theme="default" style="background: linear-gradient(135deg, #0084ff, #0066cc);"></button>
+                            <button class="theme-btn" data-theme="sunset" style="background: linear-gradient(135deg, #ff8c42, #e73c7e);"></button>
+                            <button class="theme-btn" data-theme="forest" style="background: #405540;"></button>
+                            <button class="theme-btn" data-theme="lofi_night" style="background: linear-gradient(135deg, #5b3a9e, #2f344f);"></button>
+                        </div>
+                    </div>
+                     <div class="setting-item options-group">
+                        <label>Tùy chọn</label>
+                        <button class="btn-option" id="themeToggle">
+                            <svg class="icon-sun" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/></svg>
+                            <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+                            <span>Giao diện</span>
+                        </button>
+                        <button class="btn-option" id="soundToggle">
+                            <svg class="icon-sound-on" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                            <svg class="icon-sound-off" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                             <span>Âm báo</span>
+                        </button>
+                         <button class="btn-option" id="exportBtn">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"></path></svg>
+                             <span>Xuất chat</span>
+                        </button>
+                    </div>
+                    <div class="setting-item danger">
+                        <button class="btn-danger" id="deleteConvBtn">🗑️ Xoá cuộc trò chuyện này</button>
+                    </div>
+                </div>
+                 <div class="settings-footer">
+                    <button class="btn-save" id="saveSettings">Lưu thay đổi</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Modals that are still needed -->
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal modal-small">
+            <div class="modal-header">
+                <h2>📤 Xuất lịch sử chat</h2>
+                <button class="close-btn" id="closeExport">×</button>
+            </div>
+            <div class="modal-body">
+                <button class="btn-export" id="exportTxt">📄 Xuất file .txt</button>
+                <button class="btn-export" id="exportJson">📋 Xuất file .json</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reaction Picker -->
+    <div class="reaction-picker" id="reactionPicker">
+        <span data-emoji="❤️">❤️</span><span data-emoji="😂">😂</span><span data-emoji="😮">😮</span><span data-emoji="😢">😢</span><span data-emoji="😡">😡</span><span data-emoji="👍">👍</span>
+    </div>
+
+    <!-- Audio -->
+    <audio id="notificationSound" preload="auto">
+        <source src="{{ url_for('static', filename='sounds/notification.mp3') }}" type="audio/mpeg">
+    </audio>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js', v='1.5') }}"></script>
+</body>
+</html>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='script.js', v='1.5') }}"></script>
+</body>
+</html>

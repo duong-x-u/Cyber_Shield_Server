@@ -1,0 +1,25 @@
+/* Forest Theme */
+
+.theme-forest .app-wrapper {
+    background: #121410;
+}
+
+.theme-forest {
+    --bg-main: #1a1d1a;
+    --bg-primary: #202420;
+    --bg-secondary: #2c312c;
+    --bg-tertiary: #3a403a;
+    --bg-hover: #4a514a;
+    --accent: #84a98c;
+    --accent-hover: #73957a;
+    --text-primary: #e8e8e3;
+    --text-secondary: #a9b4a9;
+    --text-muted: #727a72;
+    --received-bg: #2c312c;
+    --sent-bg: #405540;
+    --border-color: #3a403a;
+}
+
+.theme-forest .message.sent .message-bubble {
+    background: var(--sent-bg); /* Override gradient with a solid color */
+}

@@ -1,0 +1,141 @@
+/* Basic styling for the Share Blog */
+body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+    background-color: #f0f2f5; 
+    color: #1c1e21; 
+    margin: 0;
+    line-height: 1.6;
+}
+.container { 
+    max-width: 800px; 
+    margin: 2rem auto; 
+    padding: 2rem; 
+}
+header { 
+    text-align: center; 
+    padding-bottom: 1rem; 
+    margin-bottom: 2rem; 
+}
+header h1 a { 
+    text-decoration: none; 
+    color: #1877f2;
+    font-size: 2.5rem;
+}
+header p {
+    color: #606770;
+    font-size: 1.1rem;
+}
+
+.card {
+    background-color: #fff; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+h2 {
+    font-size: 1.5rem;
+    color: #1c1e21;
+    border-bottom: 1px solid #dddfe2;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+form { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 1.5rem; 
+}
+.form-group { 
+    display: flex; 
+    flex-direction: column;
+}
+.form-group label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+.form-group input[type="text"],
+.form-group textarea,
+.form-group input[type="file"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #dddfe2;
+    border-radius: 6px;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+.form-group input[type="file"] {
+    border: none;
+    padding-left: 0;
+}
+
+button[type="submit"], .btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px; 
+    cursor: pointer; 
+    text-decoration: none; 
+    display: inline-block;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    transition: filter 0.2s;
+}
+button[type="submit"]:hover, .btn:hover {
+    filter: brightness(0.95);
+}
+
+.post { 
+    background-color: #fff;
+    border: 1px solid #dddfe2; 
+    padding: 1.5rem; 
+    margin-bottom: 1.5rem; 
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.post h3 {
+    margin-top: 0;
+    font-size: 1.4rem;
+}
+.post-meta { 
+    font-size: 0.85em; 
+    color: #606770; 
+    margin-bottom: 1rem; 
+}
+.post-description {
+    margin-bottom: 1rem;
+}
+.filename {
+    font-size: 0.9em;
+    color: #606770;
+}
+.filename code {
+    background-color: #f0f2f5;
+    padding: 2px 5px;
+    border-radius: 4px;
+}
+.post-actions { 
+    margin-top: 1.5rem; 
+    display: flex; 
+    flex-wrap: wrap;
+    gap: 0.75rem; 
+    align-items: center;
+}
+
+.btn-download { background-color: #42b72a; color: white; }
+.btn-share { background-color: #1877f2; color: white; }
+.btn-edit { background-color: #ffc107; color: #1c1e21; }
+.btn-delete { background-color: #fa3e3e; color: white; }
+
+footer {
+    text-align: center;
+    margin-top: 2rem;
+    color: #606770;
+    font-size: 0.9rem;
+}
+hr {
+    border: none;
+    border-top: 1px solid #dddfe2;
+    margin: 2rem 0;
+}

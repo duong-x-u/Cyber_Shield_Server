@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="vi">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chiến Dịch Lá Chắn Xanh</title>
+  
+  <style>
+    body {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #0a1929 0%, #1a3a52 100%);
+      color: #e0f2f7;
+      min-height: 100%;
+      width: 100%;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    .app-container {
+      width: 100%;
+      min-height: 100%;
+      padding: 32px 24px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .game-title {
+      font-size: 42px;
+      font-weight: 700;
+      color: #00e5ff;
+      text-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+      margin: 0 0 12px 0;
+      letter-spacing: 1px;
+    }
+
+    .subtitle {
+      font-size: 18px;
+      color: #80deea;
+      margin: 0;
+    }
+
+    .progress-container {
+      max-width: 900px;
+      margin: 0 auto 40px auto;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 24px;
+      border-radius: 16px;
+      border: 2px solid rgba(0, 229, 255, 0.3);
+    }
+
+    .progress-text {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 600;
+      color: #00e5ff;
+      margin-bottom: 16px;
+    }
+
+    .shield-pieces {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .shield-piece {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      transition: all 0.3s ease;
+    }
+
+    .shield-piece.collected {
+      background: rgba(0, 229, 255, 0.2);
+      border-color: #00e5ff;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+    }
+
+    .challenges-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .challenge-card {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 24px;
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .challenge-card:hover {
+      transform: translateY(-4px);
+      border-color: #00e5ff;
+      box-shadow: 0 8px 24px rgba(0, 229, 255, 0.3);
+    }
+
+    .challenge-card.completed {
+      border-color: #00ff88;
+      background: rgba(0, 255, 136, 0.1);
+    }
+
+    .challenge-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .challenge-number {
+      width: 40px;
+      height: 40px;
+      background: rgba(0, 229, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: #00e5ff;
+    }
+
+    .challenge-card.completed .challenge-number {
+      background: rgba(0, 255, 136, 0.3);
+      color: #00ff88;
+    }
+
+    .challenge-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #00e5ff;
+      flex: 1;
+    }
+
+    .challenge-status {
+      font-size: 12px;
+      color: #80deea;
+      text-align: center;
+      margin-top: 12px;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+    }
+
+    .challenge-card.completed .challenge-status {
+      color: #00ff88;
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: linear-gradient(135deg, #0a1929 0%, #1a3a52 100%);
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 700px;
+      width: 100%;
+      border: 2px solid #00e5ff;
+      box-shadow: 0 0 40px rgba(0, 229, 255, 0.5);
+      max-height: 90%;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      margin-bottom: 24px;
+    }
+
+    .modal-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #00e5ff;
+      margin: 0 0 8px 0;
+    }
+
+    .question-text {
+      font-size: 18px;
+      color: #e0f2f7;
+      line-height: 1.6;
+      margin: 0 0 24px 0;
+    }
+
+    .answers-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .answer-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(0, 229, 255, 0.3);
+      color: #e0f2f7;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 16px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .answer-btn:hover {
+      background: rgba(0, 229, 255, 0.1);
+      border-color: #00e5ff;
+    }
+
+    .answer-btn.correct {
+      background: rgba(0, 255, 136, 0.2);
+      border-color: #00ff88;
+      color: #00ff88;
+    }
+
+    .answer-btn.incorrect {
+      background: rgba(255, 82, 82, 0.2);
+      border-color: #ff5252;
+      color: #ff5252;
+    }
+
+    .answer-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .feedback {
+      display: none;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      font-size: 16px;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .feedback.show {
+      display: block;
+    }
+
+    .feedback.correct {
+      background: rgba(0, 255, 136, 0.2);
+      border: 2px solid #00ff88;
+      color: #00ff88;
+    }
+
+    .feedback.incorrect {
+      background: rgba(255, 82, 82, 0.2);
+      border: 2px solid #ff5252;
+      color: #ff5252;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+
+    .btn-close {
+      background: rgba(255, 255, 255, 0.1);
+      color: #e0f2f7;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-close:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-next {
+      background: #00e5ff;
+      color: #0a1929;
+      display: none;
+    }
+
+    .btn-next.show {
+      display: block;
+    }
+
+    .btn-next:hover {
+      background: #00b8cc;
+      box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+    }
+
+    .completion-modal .modal-content {
+      text-align: center;
+      border-color: #00ff88;
+      box-shadow: 0 0 60px rgba(0, 255, 136, 0.6);
+    }
+
+    .completion-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+
+    .completion-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: #00ff88;
+      margin: 0 0 16px 0;
+    }
+
+    .completion-text {
+      font-size: 20px;
+      color: #80deea;
+      margin: 0 0 32px 0;
+    }
+
+    @media (max-width: 768px) {
+      .app-container {
+        padding: 20px 16px;
+      }
+
+      .game-title {
+        font-size: 32px;
+      }
+
+      .subtitle {
+        font-size: 16px;
+      }
+
+      .challenges-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-content {
+        padding: 24px;
+      }
+
+      .modal-title {
+        font-size: 20px;
+      }
+
+      .question-text {
+        font-size: 16px;
+      }
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  
+  <script src="https://cdn.tailwindcss.com" type="text/javascript"></script>
+ </head>
+ <body>
+  <div class="app-container">
+   <div class="header">
+    <h1 class="game-title" id="gameTitle">Chiến Dịch Lá Chắn Xanh</h1>
+    <p class="subtitle">GDQP-AN 10 • Bảo mật An ninh mạng</p>
+   </div>
+   <div class="progress-container">
+    <div class="progress-text">
+     Mảnh Khiên đã thu thập: <span id="progressCount">0</span>/8
+    </div>
+    <div class="shield-pieces" id="shieldPieces"></div>
+   </div>
+   <div class="challenges-grid" id="challengesGrid"></div>
+   <div class="modal-overlay" id="questionModal">
+    <div class="modal-content">
+     <div class="modal-header">
+      <h2 class="modal-title" id="modalTitle"></h2>
+      <p class="question-text" id="questionText"></p>
+     </div>
+     <div class="feedback" id="feedback"></div>
+     <div class="answers-list" id="answersList"></div>
+     <div class="modal-actions"><button class="btn btn-close" id="closeBtn">Đóng</button> <button class="btn btn-next" id="nextBtn">Thử thách tiếp theo</button>
+     </div>
+    </div>
+   </div>
+   <div class="modal-overlay completion-modal" id="completionModal">
+    <div class="modal-content">
+     <div class="completion-icon">
+      🛡️
+     </div>
+     <h2 class="completion-title" id="completionTitle">Kích hoạt Lá Chắn Xanh – Hoàn thành nhiệm vụ!</h2>
+     <p class="completion-text">Bạn đã thu thập đủ 8 mảnh khiên và hoàn thành tất cả thử thách bảo mật!</p><button class="btn btn-next" onclick="closeCompletionModal()">Hoàn tất</button>
+    </div>
+   </div>
+  </div>
+  
+  <audio id="background-audio" preload="auto"></audio>
+
+  <script>
+    const defaultConfig = {
+      game_title: "Chiến Dịch Lá Chắn Xanh",
+      completion_message: "Kích hoạt Lá Chắn Xanh – Hoàn thành nhiệm vụ!"
+    };
+
+    // Danh sách các file nhạc trong thư mục 'music/'
+    // DƯƠNG PHẢI THAY THẾ DANH SÁCH NÀY bằng file .mp3 của m nha
+    const MUSIC_PLAYLIST = [
+        "/duongdev/anmqpan/music/1.mp3",
+        "/duongdev/anmqpan/music/2.mp3",
+    ];
+
+    let currentTrackIndex = 0;
+    const audioPlayer = document.getElementById('background-audio');
+    let isMusicStarted = false;
+
+    function playNextTrack() {
+        if (MUSIC_PLAYLIST.length === 0) {
+            console.log("Playlist rỗng, không phát nhạc.");
+            return;
+        }
+
+        // Đặt nguồn và phát
+        audioPlayer.src = MUSIC_PLAYLIST[currentTrackIndex];
+        audioPlayer.play().catch(error => {
+            console.warn("Lỗi tự động phát (có thể cần tương tác người dùng).", error);
+        });
+
+        // Thiết lập khi bài hát kết thúc
+        audioPlayer.onended = () => {
+            currentTrackIndex = (currentTrackIndex + 1) % MUSIC_PLAYLIST.length; 
+            playNextTrack();
+        };
+    }
+    
+    // Hàm cố gắng bắt đầu phát nhạc lần đầu
+    function startMusicOnUserInteraction() {
+        if (!isMusicStarted) {
+            // Đảm bảo chỉ cố gắng phát 1 lần khi có tương tác đầu tiên
+            isMusicStarted = true;
+            playNextTrack();
+        }
+    }
+
+    // Lắng nghe sự kiện click/tap trên toàn bộ trang để bắt đầu nhạc
+    document.addEventListener('click', startMusicOnUserInteraction, { once: true });
+    document.addEventListener('touchstart', startMusicOnUserInteraction, { once: true });
+
+
+    const challenges = [
+      {
+        id: 1,
+        title: "Thử thách 1 – Thu thập Mảnh Khiên Số 1",
+        question: "Đâu là vai trò chủ yếu của \"Mạng\" theo định nghĩa trong bài?",
+        answers: [
+          "A. Chỉ là môi trường để lưu trữ dữ liệu.",
+          "B. Là môi trường để cấp, truyền đưa, thu thập, xử lý, lưu trữ và trao đổi thông tin.",
+          "C. Chỉ là nơi kết nối các thiết bị phần cứng.",
+          "D. Là nơi người dùng thực hiện các hành vi xã hội"
+        ],
+        correct: 1
+      },
+      {
+        id: 2,
+        title: "Thử thách 2 – Thu thập Mảnh Khiên Số 2",
+        question: "Thành phần nào KHÔNG thuộc cấu thành của Không gian mạng?",
+        answers: [
+          "A. Mạng Internet và mạng máy tính.",
+          "B. Hệ thống xử lý và điều khiển thông tin.",
+          "C. Cơ sở dữ liệu và hệ thống thông tin.",
+          "D. Địa điểm vật lý của máy chủ (Server)."
+        ],
+        correct: 3
+      },
+      {
+        id: 3,
+        title: "Thử thách 3 – Thu thập Mảnh Khiên Số 3",
+        question: "Khẳng định nào sau đây ĐÚNG về Không gian mạng?",
+        answers: [
+          "A. Là môi trường có giới hạn về không gian và thời gian.",
+          "B. Là mạng lưới kết nối chỉ của các máy tính cá nhân.",
+          "C. Là mạng lưới kết nối của cơ sở hạ tầng công nghệ thông tin và là nơi các hành vi xã hội không bị giới hạn bởi không gian và thời gian.",
+          "D. Chỉ bao gồm các thiết bị kết nối không dây."
+        ],
+        correct: 2
+      },
+      {
+        id: 4,
+        title: "Thử thách 4 – Thu thập Mảnh Khiên Số 4",
+        question: "Theo khái niệm, An ninh mạng giúp bảo vệ quyền lợi hợp pháp của các đối tượng nào?",
+        answers: [
+          "A. Chỉ bảo vệ An ninh quốc gia.",
+          "B. Chỉ bảo vệ Trật tự an toàn xã hội.",
+          "C. Chỉ bảo vệ cơ quan tổ chức, cá nhân.",
+          "D. Tất cả các đáp án trên (An ninh quốc gia, trật tự an toàn xã hội, và cơ quan tổ chức, cá nhân)."
+        ],
+        correct: 3
+      },
+      {
+        id: 5,
+        title: "Thử thách 5 – Thu thập Mảnh Khiên Số 5",
+        question: "Khái niệm \"An ninh mạng\" đề cập đến việc bảo vệ hoạt động trên môi trường nào?",
+        answers: [
+          "A. Mạng viễn thông.",
+          "B. Mạng máy tính.",
+          "C. Không gian mạng.",
+          "D. Mạng nội bộ (LAN)."
+        ],
+        correct: 2
+      },
+      {
+        id: 6,
+        title: "Thử thách 6 – Thu thập Mảnh Khiên Số 6",
+        question: "Tại sao việc đảm bảo An ninh mạng là cần thiết đối với cả cá nhân và quốc gia?",
+        answers: [
+          "A. Chỉ để tuân thủ pháp luật.",
+          "B. Chỉ để bảo vệ cơ sở hạ tầng kỹ thuật.",
+          "C. Vì Không gian mạng là nơi diễn ra các hoạt động xã hội quan trọng, cần được bảo vệ để duy trì an toàn xã hội và lợi ích hợp pháp của mọi chủ thể.",
+          "D. Vì đây là xu hướng bắt buộc của toàn cầu."
+        ],
+        correct: 2
+      },
+      {
+        id: 7,
+        title: "Thử thách 7 – Thu thập Mảnh Khiên Số 7",
+        question: "Tình huống: Một nhóm hacker tấn công bệnh viện, mã hóa dữ liệu và đòi tiền chuộc. Hành vi này gây phương hại đến đối tượng nào?",
+        answers: [
+          "A. Chỉ An ninh quốc gia.",
+          "B. Chỉ Trật tự an toàn xã hội.",
+          "C. Quyền và lợi ích hợp pháp của cơ quan tổ chức (bệnh viện) và cá nhân (bệnh nhân).",
+          "D. Chỉ cơ sở hạ tầng công nghệ thông tin."
+        ],
+        correct: 2
+      },
+      {
+        id: 8,
+        title: "Thử thách 8 – Thu thập Mảnh Khiên Số 8",
+        question: "Bạn họp trực tuyến không bị giới hạn địa lý. Điều này thể hiện đặc điểm nào của Không gian mạng?",
+        answers: [
+          "A. Chỉ sử dụng cáp quang.",
+          "B. Người thực hiện hành vi xã hội không bị giới hạn bởi không gian và thời gian.",
+          "C. Phụ thuộc vào tốc độ mạng nội bộ.",
+          "D. Chỉ giới hạn trong một quốc gia."
+        ],
+        correct: 1
+      }
+    ];
+
+    let completedChallenges = new Set();
+    let currentChallengeId = null;
+
+    function initApp() {
+      renderShieldPieces();
+      renderChallenges();
+      updateProgress();
+    }
+
+    function renderShieldPieces() {
+      const container = document.getElementById('shieldPieces');
+      container.innerHTML = '';
+      for (let i = 1; i <= 8; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'shield-piece';
+        piece.id = `shield-${i}`;
+        piece.textContent = completedChallenges.has(i) ? '🛡️' : i;
+        if (completedChallenges.has(i)) {
+          piece.classList.add('collected');
+        }
+        container.appendChild(piece);
+      }
+    }
+
+    function renderChallenges() {
+      const grid = document.getElementById('challengesGrid');
+      grid.innerHTML = '';
+      challenges.forEach(challenge => {
+        const card = document.createElement('div');
+        card.className = 'challenge-card';
+        if (completedChallenges.has(challenge.id)) {
+          card.classList.add('completed');
+        }
+        card.innerHTML = `
+          <div class="challenge-header">
+            <div class="challenge-number">${challenge.id}</div>
+            <div class="challenge-title">${challenge.title}</div>
+          </div>
+          <div class="challenge-status">
+            ${completedChallenges.has(challenge.id) ? '✓ Đã hoàn thành' : 'Nhấn để bắt đầu'}
+          </div>
+        `;
+        card.addEventListener('click', () => openChallenge(challenge.id));
+        grid.appendChild(card);
+      });
+    }
+
+    function openChallenge(id) {
+      currentChallengeId = id;
+      const challenge = challenges.find(c => c.id === id);
+      document.getElementById('modalTitle').textContent = challenge.title;
+      document.getElementById('questionText').textContent = challenge.question;
+      
+      const answersList = document.getElementById('answersList');
+      answersList.innerHTML = '';
+      challenge.answers.forEach((answer, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'answer-btn';
+        btn.textContent = answer;
+        btn.addEventListener('click', () => checkAnswer(index, challenge.correct));
+        answersList.appendChild(btn);
+      });
+
+      document.getElementById('feedback').classList.remove('show', 'correct', 'incorrect');
+      document.getElementById('nextBtn').classList.remove('show');
+      document.getElementById('questionModal').classList.add('active');
+    }
+
+    function checkAnswer(selected, correct) {
+      const buttons = document.querySelectorAll('.answer-btn');
+      const feedback = document.getElementById('feedback');
+      
+      buttons.forEach((btn, index) => {
+        btn.disabled = true;
+        if (index === correct) {
+          btn.classList.add('correct');
+        } else if (index === selected && selected !== correct) {
+          btn.classList.add('incorrect');
+        }
+      });
+
+      if (selected === correct) {
+        feedback.textContent = '✓ Chính xác! Bạn đã thu thập được mảnh khiên này!';
+        feedback.classList.add('show', 'correct');
+        completedChallenges.add(currentChallengeId);
+        updateProgress();
+        
+        if (currentChallengeId < 8) {
+          document.getElementById('nextBtn').classList.add('show');
+        } else {
+          setTimeout(checkCompletion, 1500);
+        }
+      } else {
+        feedback.textContent = '✗ Chưa chính xác. Hãy thử lại!';
+        feedback.classList.add('show', 'incorrect');
+        setTimeout(() => {
+          buttons.forEach(btn => {
+            btn.disabled = false;
+            btn.classList.remove('correct', 'incorrect');
+          });
+          feedback.classList.remove('show');
+        }, 2000);
+      }
+    }
+
+    function updateProgress() {
+      document.getElementById('progressCount').textContent = completedChallenges.size;
+      renderShieldPieces();
+      renderChallenges();
+    }
+
+    function checkCompletion() {
+      if (completedChallenges.size === 8) {
+        document.getElementById('questionModal').classList.remove('active');
+        document.getElementById('completionModal').classList.add('active');
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('questionModal').classList.remove('active');
+    }
+
+    function closeCompletionModal() {
+      document.getElementById('completionModal').classList.remove('active');
+    }
+
+    function nextChallenge() {
+      closeModal();
+      if (currentChallengeId < 8) {
+        openChallenge(currentChallengeId + 1);
+      }
+    }
+
+    document.getElementById('closeBtn').addEventListener('click', closeModal);
+    document.getElementById('nextBtn').addEventListener('click', nextChallenge);
+
+    
+
+    initApp();
+  </script>
+ </body>
+</html>

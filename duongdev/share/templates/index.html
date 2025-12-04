@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Share Blog{% endblock %}
+
+{% block content %}
+    <div class="card upload-section">
+        <h2>New Post</h2>
+        <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="title">Title</label>
+                <input type="text" id="title" name="title" required placeholder="e.g., C++ Sorting Algorithms">
+            </div>
+            <div class="form-group">
+                <label for="description">Description (optional)</label>
+                <textarea id="description" name="description" rows="3" placeholder="e.g., Contains quicksort, mergesort..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="file">File</label>
+                <input type="file" id="file" name="file" required>
+            </div>
+            <button type="submit" class="btn">Upload & Share</button>
+        </form>
+    </div>
+
+    <hr>
+
+    <div class="posts-section">
+        <h2>Shared Files</h2>
+        {% if posts %}
+            {% for post in posts %}
+                <div class="post">
+                    <h3>{{ post.title }}</h3>
+                    <p class="post-meta">
+                        Uploaded on {{ post.upload_date.strftime('%Y-%m-%d %H:%M') }} |
+                        Size: {{ post.formatted_size() }}
+                    </p>
+                    {% if post.description %}
+                        <p class="post-description">{{ post.description }}</p>
+                    {% endif %}
+                    <p class="filename">Filename: <code>{{ post.filename }}</code></p>
+                    <div class="post-actions">
+                        <a href="{{ url_for('download', filename=post.filename) }}" class="btn btn-download">Download</a>
+                        <button class="btn btn-share" data-link="{{ url_for('download', filename=post.filename, _external=True) }}">Share</button>
+                        <a href="{{ url_for('edit_post', post_id=post.id) }}" class="btn btn-edit">Edit</a>
+                        <form action="{{ url_for('delete_post', post_id=post.id) }}" method="post" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this post?');">
+                            <button type="submit" class="btn btn-delete">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No files have been shared yet. Be the first!</p>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Share Button Logic ---
+    const setupShareButtons = () => {
+        const shareButtons = document.querySelectorAll('.btn-share');
+        shareButtons.forEach(button => {
+            // Remove existing listener to prevent duplicates after DOM updates
+            const oldClickListener = button.__shareClickListener;
+            if (oldClickListener) {
+                button.removeEventListener('click', oldClickListener);
+            }
+            const newClickListener = () => {
+                const link = button.dataset.link;
+                navigator.clipboard.writeText(link).then(() => {
+                    const originalText = button.textContent;
+                    button.textContent = 'Copied!';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                    }, 2000); // Revert back after 2 seconds
+                }).catch(err => {
+                    console.error('Failed to copy text: ', err);
+                });
+            };
+            button.addEventListener('click', newClickListener);
+            button.__shareClickListener = newClickListener; // Store reference
+        });
+    };
+    setupShareButtons(); // Initial setup
+
+    // --- SocketIO Logic ---
+    const socket = io('/duongdev/share');
+    const postsSection = document.querySelector('.posts-section');
+    const sharedFilesDiv = postsSection.querySelector('div'); // The div containing all posts
+    
+    // Helper function to create a post element
+    const createPostElement = (post) => {
+        const postDiv = document.createElement('div');
+        postDiv.className = 'post';
+        postDiv.id = `post-${post.id}`; // Add an ID for easy removal/update
+        postDiv.innerHTML = `
+            <h3>${post.title}</h3>
+            <p class="post-meta">
+                Uploaded on ${post.date} |
+                Size: ${post.size}
+            </p>
+            ${post.description ? `<p class="post-description">${post.description}</p>` : ''}
+            <p class="filename">Filename: <code>${post.filename}</code></p>
+            <div class="post-actions">
+                <a href="/duongdev/share/download/${post.filename}" class="btn btn-download">Download</a>
+                <button class="btn btn-share" data-link="/duongdev/share/download/${post.filename}" data-id="${post.id}">Share</button>
+                <a href="/duongdev/share/edit/${post.id}" class="btn btn-edit">Edit</a>
+                <form action="/duongdev/share/delete/${post.id}" method="post" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this post?');">
+                    <button type="submit" class="btn btn-delete">Delete</button>
+                </form>
+            </div>
+        `;
+        return postDiv;
+    };
+
+    // Event listener for new file uploaded
+    socket.on('file_uploaded', (post) => {
+        const newPostElement = createPostElement(post);
+        const postsContainer = document.querySelector('.posts-section');
+        const existingPosts = postsContainer.querySelector('.post'); // Check if there are existing posts
+        
+        if (existingPosts) {
+            existingPosts.parentNode.insertBefore(newPostElement, existingPosts);
+        } else {
+            // If no posts, replace 'No files shared yet' message
+            const noFilesMessage = postsContainer.querySelector('p');
+            if (noFilesMessage && noFilesMessage.textContent === 'No files have been shared yet. Be the first!') {
+                noFilesMessage.remove(); // Remove the message
+                const newPostsContainer = document.createElement('div'); // Create a container for posts
+                newPostsContainer.appendChild(newPostElement);
+                postsContainer.appendChild(newPostsContainer);
+            } else {
+                postsContainer.appendChild(newPostElement);
+            }
+        }
+        setupShareButtons(); // Re-setup share buttons for new elements
+    });
+
+    // Event listener for file deleted
+    socket.on('file_deleted', (data) => {
+        const postElement = document.getElementById(`post-${data.id}`);
+        if (postElement) {
+            postElement.remove();
+            // If no posts left, show 'No files shared yet' message
+            if (document.querySelectorAll('.posts-section .post').length === 0) {
+                const noFilesMessage = document.createElement('p');
+                noFilesMessage.textContent = 'No files have been shared yet. Be the first!';
+                postsSection.appendChild(noFilesMessage);
+            }
+        }
+    });
+
+    // Event listener for file edited
+    socket.on('file_edited', (post) => {
+        const postElement = document.getElementById(`post-${post.id}`);
+        if (postElement) {
+            postElement.querySelector('h3').textContent = post.title;
+            postElement.querySelector('.post-meta').innerHTML = `
+                Uploaded on ${post.date} |
+                Size: ${postElement.querySelector('.post-meta').textContent.split('|')[1].trim()}
+            `; // Preserve size
+            const descriptionElement = postElement.querySelector('.post-description');
+            if (post.description) {
+                if (descriptionElement) {
+                    descriptionElement.textContent = post.description;
+                } else {
+                    const newDescriptionElement = document.createElement('p');
+                    newDescriptionElement.className = 'post-description';
+                    newDescriptionElement.textContent = post.description;
+                    postElement.insertBefore(newDescriptionElement, postElement.querySelector('.filename'));
+                }
+            } else if (descriptionElement) {
+                descriptionElement.remove();
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

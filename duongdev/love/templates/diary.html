@@ -1,0 +1,1415 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-book-heart"></i> Nhật ký tình yêu</h1>
+    <p>Ghi lại những khoảnh khắc đáng nhớ của chúng mình</p>
+</div>
+
+<!-- Add new entry -->
+<div class="add-section">
+    <button class="btn-add" id="toggleDiaryForm">
+        <i class="fas fa-plus"></i> Viết nhật ký mới
+    </button>
+    
+    <form class="add-form" id="diaryForm" action="{{ url_for('add_diary') }}" method="POST" style="display: none;">
+        <div class="form-group">
+            <label for="title">Tiêu đề</label>
+            <input type="text" id="title" name="title" required placeholder="Hôm nay có gì vui?">
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="date">Ngày</label>
+                <input type="date" id="date" name="date">
+            </div>
+            <div class="form-group">
+                <label for="mood">Tâm trạng</label>
+                <select id="mood" name="mood">
+                    <option value="love">😍 Yêu</option>
+                    <option value="happy">😊 Vui</option>
+                    <option value="excited">🥰 Hạnh phúc</option>
+                    <option value="grateful">🙏 Biết ơn</option>
+                    <option value="romantic">💕 Lãng mạn</option>
+                    <option value="miss">💭 Nhớ</option>
+                    <option value="sad">😢 Buồn</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="content">Nội dung</label>
+            <textarea id="content" name="content" rows="6" required placeholder="Viết những gì bạn muốn lưu giữ..."></textarea>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-save"></i> Lưu nhật ký
+            </button>
+            <button type="button" class="btn-secondary" id="cancelDiary">Hủy</button>
+        </div>
+    </form>
+</div>
+
+<!-- Diary entries -->
+<div class="diary-list">
+    {% if entries %}
+        {% for entry in entries %}
+        <div class="diary-entry">
+            <div class="entry-header">
+                <div class="entry-mood">
+                    {% if entry.mood == 'happy' %}😊
+                    {% elif entry.mood == 'love' %}😍
+                    {% elif entry.mood == 'excited' %}🥰
+                    {% elif entry.mood == 'grateful' %}🙏
+                    {% elif entry.mood == 'romantic' %}💕
+                    {% elif entry.mood == 'miss' %}💭
+                    {% elif entry.mood == 'sad' %}😢
+                    {% else %}💖{% endif %}
+                </div>
+                <div class="entry-meta">
+                    <h3 class="entry-title">{{ entry.title }}</h3>
+                    <span class="entry-date">
+                        <i class="fas fa-calendar"></i> 
+                        {{ entry.date.strftime('%d/%m/%Y') }}
+                    </span>
+                </div>
+                <div class="entry-actions">
+                    <a href="{{ url_for('edit_diary', id=entry.id) }}" class="btn-edit" title="Chỉnh sửa">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                    <button class="btn-delete-trigger" data-delete-url="{{ url_for('delete_diary', id=entry.id) }}" title="Xóa (Good luck 😈)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="entry-content">
+                {{ entry.content | safe }}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <i class="fas fa-book-open"></i>
+            <h3>Chưa có nhật ký nào</h3>
+            <p>Hãy bắt đầu ghi lại câu chuyện tình yêu của bạn!</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- ================================================== -->
+<!-- NÚT XÓA BAY KHẮP MÀN HÌNH 😈 -->
+<!-- ================================================== -->
+<button class="flying-delete-btn" id="flyingDeleteBtn" style="display: none;">
+    <span id="flyingBtnText">Xóa (100)</span>
+</button>
+
+<!-- ================================================== -->
+<!-- DELETE MODAL - CHIA TAY KHÓ LẮM EDITION 😈🔥 -->
+<!-- ================================================== -->
+<div class="modal" id="deleteModal">
+    <div class="modal-content delete-modal-content" id="modalContent">
+        <div class="delete-header">
+            <span class="delete-emoji" id="deleteEmoji">🤔</span>
+            <h3 id="deleteTitle">Bạn muốn xóa kỷ niệm?</h3>
+            <p class="delete-tagline">POV: Chia tay tui khó lắm 😈</p>
+        </div>
+        
+        <p id="deleteMessage">Được thôi... nhưng phải vượt qua địa ngục đã!</p>
+        
+        <!-- Progress bar -->
+        <div class="delete-progress-container">
+            <div class="delete-progress-bar" id="deleteProgressBar"></div>
+            <span class="delete-progress-text" id="deleteProgressText">0 / 100</span>
+        </div>
+        
+        <!-- Challenge queue display -->
+        <div class="challenge-queue" id="challengeQueue">
+            <div class="queue-title">📋 Hàng đợi thử thách:</div>
+            <div class="queue-items" id="queueItems"></div>
+        </div>
+        
+        <!-- CAPTCHA Challenge -->
+        <div class="challenge-box" id="captchaChallenge" style="display: none;">
+            <div class="challenge-header captcha-header">
+                <span>🔐 CAPTCHA</span>
+            </div>
+            <p>Nhập mã bên dưới:</p>
+            <div class="captcha-display" id="captchaDisplay">ABC123</div>
+            <input type="text" id="captchaInput" placeholder="Nhập mã...">
+            <button type="button" class="btn-challenge" id="captchaSubmit">Xác nhận</button>
+            <p class="challenge-error" id="captchaError" style="display: none;">❌ Sai rồi!</p>
+        </div>
+        
+        <!-- Math Challenge -->
+        <div class="challenge-box" id="mathChallenge" style="display: none;">
+            <div class="challenge-header math-header">
+                <span>📐 TOÁN TÌNH YÊU</span>
+            </div>
+            <div class="math-problem" id="mathProblem"></div>
+            <input type="text" id="mathInput" placeholder="Nhập đáp án...">
+            <button type="button" class="btn-challenge" id="mathSubmit">Kiểm tra</button>
+            <p class="challenge-error" id="mathError" style="display: none;">❌ Sai! Tính lại đi 😤</p>
+            <button type="button" class="btn-hint" id="mathHintBtn">💡 Xem gợi ý</button>
+            <p class="math-hint" id="mathHint" style="display: none;"></p>
+        </div>
+        
+        <!-- Type Challenge -->
+        <div class="challenge-box" id="typeChallenge" style="display: none;">
+            <div class="challenge-header type-header">
+                <span>⌨️ GÕ CHỮ</span>
+            </div>
+            <p>Gõ chính xác câu sau:</p>
+            <div class="type-sentence">"Tôi không muốn xóa kỷ niệm đẹp này"</div>
+            <input type="text" id="typeInput" placeholder="Gõ câu trên...">
+            <button type="button" class="btn-challenge" id="typeSubmit">Kiểm tra</button>
+            <p class="type-progress" id="typeProgress">✅ 0 / 10 lần</p>
+            <p class="challenge-error" id="typeError" style="display: none;">❌ Sai! Gõ lại đi!</p>
+        </div>
+        
+        <!-- Cooldown display -->
+        <div class="cooldown-display" id="cooldownDisplay" style="display: none;">
+            <p>⏱️ Chờ <span id="cooldownTime">5</span>s để tiếp tục...</p>
+            <div class="cooldown-bar">
+                <div class="cooldown-progress" id="cooldownProgress"></div>
+            </div>
+        </div>
+        
+        <!-- Return countdown for flying button -->
+        <div class="return-countdown" id="returnCountdown" style="display: none;">
+            <p>🎯 Nút sẽ quay lại sau: <span id="returnTime">10</span>s</p>
+            <p class="return-hint">Hoặc đuổi theo nó đi! 😈</p>
+        </div>
+        
+        <!-- Hint messages -->
+        <p class="delete-hint" id="deleteHint">Bấm nút để bắt đầu hành trình địa ngục 💀</p>
+        
+        <div class="modal-actions">
+            <button type="button" class="btn-keep" id="cancelDeleteBtn">
+                <i class="fas fa-heart"></i> Thôi, giữ lại 💕
+            </button>
+            <div class="delete-btn-container" id="deleteBtnContainer">
+                <button type="button" class="btn-delete-confirm" id="confirmDeleteBtn">
+                    <span id="deleteBtnText">Bắt đầu (100)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ==========================================
+    // FORM TOGGLE
+    // ==========================================
+    document.getElementById('toggleDiaryForm').addEventListener('click', function() {
+        var form = document.getElementById('diaryForm');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        this.style.display = 'none';
+    });
+    
+    document.getElementById('cancelDiary').addEventListener('click', function() {
+        document.getElementById('diaryForm').style.display = 'none';
+        document.getElementById('toggleDiaryForm').style.display = 'block';
+    });
+    
+    // ==========================================
+    // CẤU HÌNH ĐỊA NGỤC 😈
+    // ==========================================
+    var CONFIG = {
+        CLICKS_REQUIRED: 100,
+        COOLDOWN_SECONDS: 5,
+        CAPTCHA_INTERVAL: 10,
+        MATH_START_AT: 50,
+        TYPE_TRIGGER: 50,
+        TYPE_REQUIRED: 10,
+        BUTTON_RETURN_SECONDS: 10
+    };
+    
+    // ==========================================
+    // STATE
+    // ==========================================
+    var state = {
+        deleteUrl: '',
+        clickCount: 0,
+        typeCount: 0,
+        typeDone: false,
+        isOnCooldown: false,
+        cooldownTimer: null,
+        returnTimer: null,
+        returnCountdown: null,
+        currentCaptcha: '',
+        currentMath: null,
+        pendingChallenges: [],
+        buttonIsFlying: false
+    };
+    
+    // ==========================================
+    // TOÁN THỰC TẾ - Phiên bản TÌNH YÊU 💕
+    // ==========================================
+    var mathProblems = [
+        // TOÁN TÍNH TIỀN DATE 💸
+        {
+            q: "Hai đứa đi ăn hết 185k, chia đôi mỗi người bao nhiêu?",
+            hint: "185.000 ÷ 2 = ?",
+            a: ["92500", "92.500", "92500đ", "92.5k"]
+        },
+        {
+            q: "Trà sữa 45k, giảm 20%. Tính tiền phải trả?",
+            hint: "45.000 × 80% = 45.000 × 0.8",
+            a: ["36000", "36k", "36.000", "36000đ"]
+        },
+        {
+            q: "Mua 2 trà sữa 35k/ly, 1 bánh 25k. Tổng bao nhiêu?",
+            hint: "35.000 × 2 + 25.000 = ?",
+            a: ["95000", "95k", "95.000", "95000đ"]
+        },
+        {
+            q: "Date hết 250k, bạn trai trả 60%. Bạn gái trả bao nhiêu?",
+            hint: "Bạn gái trả 40% của 250.000",
+            a: ["100000", "100k", "100.000", "100000đ"]
+        },
+        {
+            q: "Vé xem phim 75k/người, bỏng nước 55k.<br>Hai người hết bao nhiêu?",
+            hint: "75.000 × 2 + 55.000 = ?",
+            a: ["205000", "205k", "205.000", "205000đ"]
+        },
+        {
+            q: "Mua quà sinh nhật 320k, được giảm 15%.<br>Phải trả bao nhiêu?",
+            hint: "320.000 × 85% = 320.000 × 0.85",
+            a: ["272000", "272k", "272.000", "272000đ"]
+        },
+
+        // TOÁN THỜI GIAN YÊU NHAU ⏰
+        {
+            q: "Yêu nhau từ 14/2, hôm nay 14/5.<br>Được mấy tháng?",
+            hint: "Đếm: Tháng 2 → 3 → 4 → 5",
+            a: ["3", "3 tháng", "ba"]
+        },
+        {
+            q: "Mỗi tuần gặp nhau 3 lần.<br>1 tháng (4 tuần) gặp mấy lần?",
+            hint: "3 × 4 = ?",
+            a: ["12", "12 lần"]
+        },
+        {
+            q: "Chat từ 8h tối đến 11h30 đêm.<br>Chat được mấy tiếng?",
+            hint: "Từ 20:00 đến 23:30 = ?",
+            a: ["3.5", "3,5", "3 tiếng 30", "3 tiếng rưỡi"]
+        },
+        {
+            q: "Quen 100 ngày, cãi nhau 5 ngày.<br>Vui được bao nhiêu %?",
+            hint: "(100 - 5) ÷ 100 × 100%",
+            a: ["95", "95%"]
+        },
+        {
+            q: "Mỗi ngày nhắn 50 tin.<br>1 tuần nhắn bao nhiêu tin?",
+            hint: "50 × 7 = ?",
+            a: ["350", "350 tin"]
+        },
+
+        // TOÁN KHOẢNG CÁCH 🚶
+        {
+            q: "Nhà 2 đứa cách nhau 6km.<br>Gặp ở giữa, mỗi người đi mấy km?",
+            hint: "6 ÷ 2 = ?",
+            a: ["3", "3km", "3 km"]
+        },
+        {
+            q: "Đi xe máy 30km/h, quãng đường 15km.<br>Mất mấy phút?",
+            hint: "15 ÷ 30 = 0.5 giờ = ? phút",
+            a: ["30", "30 phút", "30p"]
+        },
+        {
+            q: "Đi bộ 5km/h trong 30 phút.<br>Đi được mấy km?",
+            hint: "30 phút = 0.5 giờ, 5 × 0.5 = ?",
+            a: ["2.5", "2,5", "2.5km"]
+        },
+        {
+            q: "Nhà cách trường 3km, đi về 2 lượt/ngày.<br>1 tuần đi bao nhiêu km?",
+            hint: "3 × 2 × 7 = ?",
+            a: ["42", "42km", "42 km"]
+        },
+
+        // PHƯƠNG TRÌNH ĐƠN GIẢN 📐
+        {
+            q: "Giải phương trình: 2x + 5 = 15<br>x = ?",
+            hint: "2x = 15 - 5 = 10, x = 10 ÷ 2",
+            a: ["5"]
+        },
+        {
+            q: "Giải phương trình: 3x - 7 = 14<br>x = ?",
+            hint: "3x = 14 + 7 = 21, x = 21 ÷ 3",
+            a: ["7"]
+        },
+        {
+            q: "Giải phương trình: 5x + 10 = 35<br>x = ?",
+            hint: "5x = 35 - 10 = 25, x = ?",
+            a: ["5"]
+        },
+        {
+            q: "Tuổi anh gấp đôi tuổi em.<br>Tổng 2 tuổi = 36. Tuổi em = ?",
+            hint: "Em = x, Anh = 2x, x + 2x = 36",
+            a: ["12"]
+        },
+        {
+            q: "x² = 49. Tìm x (x > 0)",
+            hint: "Số nào nhân chính nó = 49?",
+            a: ["7"]
+        },
+        {
+            q: "√144 = ?",
+            hint: "12 × 12 = 144",
+            a: ["12"]
+        },
+        {
+            q: "√81 + √16 = ?",
+            hint: "9 + 4 = ?",
+            a: ["13"]
+        },
+
+        // TOÁN PHẦN TRĂM 📊
+        {
+            q: "Thi được 8/10 điểm. Đạt bao nhiêu %?",
+            hint: "8 ÷ 10 × 100%",
+            a: ["80", "80%"]
+        },
+        {
+            q: "Lớp có 40 người, 30% là nam.<br>Có bao nhiêu nam?",
+            hint: "40 × 30% = 40 × 0.3",
+            a: ["12", "12 người"]
+        },
+        {
+            q: "Giày 500k giảm 15%.<br>Giá mới bao nhiêu?",
+            hint: "500.000 × 85% = ?",
+            a: ["425000", "425k", "425.000"]
+        },
+        {
+            q: "Điểm thi tăng từ 6 lên 9.<br>Tăng bao nhiêu %?",
+            hint: "(9 - 6) ÷ 6 × 100%",
+            a: ["50", "50%"]
+        },
+
+        // TOÁN VUI VỀ TÌNH YÊU 😂💕
+        {
+            q: "1 tin nhắn = 1 điểm yêu thương.<br>Gửi 50 tin/ngày × 30 ngày = ?",
+            hint: "50 × 30 = ?",
+            a: ["1500", "1500 điểm"]
+        },
+        {
+            q: "Mỗi lần gặp được +10 điểm hạnh phúc.<br>Gặp 12 lần/tháng, tổng = ?",
+            hint: "10 × 12 = ?",
+            a: ["120", "120 điểm"]
+        },
+        {
+            q: "Cãi nhau: -50 điểm.<br>Làm lành: +80 điểm.<br>Tổng = ?",
+            hint: "-50 + 80 = ?",
+            a: ["30", "+30", "30 điểm"]
+        },
+        {
+            q: "Crush 3 tháng + Yêu 6 tháng = ? tháng tình cảm",
+            hint: "3 + 6 = ?",
+            a: ["9", "9 tháng"]
+        },
+        {
+            q: "Ngày có 24h, dành 3h nghĩ về ny.<br>Chiếm bao nhiêu %?",
+            hint: "3 ÷ 24 × 100% = 12.5%",
+            a: ["12.5", "12,5", "12.5%"]
+        }
+    ];
+    
+    // ==========================================
+    // CAPTCHA GENERATOR
+    // ==========================================
+    function generateCaptcha() {
+        var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        var captcha = '';
+        for (var i = 0; i < 6; i++) {
+            captcha += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return captcha;
+    }
+    
+    // ==========================================
+    // RANDOM MATH PROBLEM
+    // ==========================================
+    function getRandomMath() {
+        var index = Math.floor(Math.random() * mathProblems.length);
+        return mathProblems[index];
+    }
+    
+    // ==========================================
+    // UI HELPERS
+    // ==========================================
+    var stages = [
+        { min: 0, max: 10, emoji: '🤔', title: 'Mới bắt đầu...', msg: 'Còn xa lắm!' },
+        { min: 11, max: 25, emoji: '😟', title: 'Cố gắng lên...', msg: 'Mới có 1/4 thôi!' },
+        { min: 26, max: 40, emoji: '😢', title: 'Đừng mà...', msg: 'Kỷ niệm tội nghiệp!' },
+        { min: 41, max: 55, emoji: '😭', title: 'Nửa đường rồi!', msg: 'Giờ mới bắt đầu khó!' },
+        { min: 56, max: 70, emoji: '💔', title: 'Tim đau quá...', msg: 'Sao nỡ làm vậy...' },
+        { min: 71, max: 85, emoji: '😤', title: 'Quyết tâm ghê!', msg: 'Gần xong rồi đó!' },
+        { min: 86, max: 95, emoji: '🔥', title: 'SẮP XONG!', msg: 'Cố lên nào!' },
+        { min: 96, max: 99, emoji: '💀', title: 'CƠ HỘI CUỐI!', msg: 'Không thể quay lại!' },
+        { min: 100, max: 100, emoji: '👋', title: 'Vĩnh biệt...', msg: 'Kỷ niệm đã ra đi...' }
+    ];
+    
+    var hints = [
+        'Nút đang chạy kìa! Đuổi theo đi! 🏃',
+        'Người yêu biết được buồn lắm đó! 😢',
+        'Nghĩ lại đi, kỷ niệm đẹp mà...',
+        'Error 404: Lý do xóa không tìm thấy 🤷',
+        'Nút "Giữ lại" to đẹp lắm! ←←←',
+        'Tính toán mệt chưa? 📚',
+        'Gõ chữ mỏi tay chưa? ⌨️',
+        'Nút chạy nhanh không? 😈',
+        'Tội nghiệp ngón tay quá... 🖱️',
+        'Kiên nhẫn ghê, nhưng sai hướng rồi!',
+        'Bạn có thể dừng lại bất cứ lúc nào 💕',
+        'Đi uống trà sữa không? 🧋',
+        'Mỗi click là một giọt nước mắt 😢',
+        'Nút: "Bắt được tui thì xóa!" 😜',
+        'Loading lý do giữ kỷ niệm... 99%',
+        'Hay là đi xem phim thay vì xóa? 🎬',
+        'Chuột của bạn đang khóc đó! 🖱️😭'
+    ];
+    
+    function getStage(count) {
+        for (var i = 0; i < stages.length; i++) {
+            if (count >= stages[i].min && count <= stages[i].max) return stages[i];
+        }
+        return stages[0];
+    }
+    
+    function updateMainUI() {
+        var stage = getStage(state.clickCount);
+        var remaining = CONFIG.CLICKS_REQUIRED - state.clickCount;
+        var percent = (state.clickCount / CONFIG.CLICKS_REQUIRED) * 100;
+        
+        document.getElementById('deleteEmoji').textContent = stage.emoji;
+        document.getElementById('deleteTitle').textContent = stage.title;
+        document.getElementById('deleteMessage').textContent = stage.msg;
+        document.getElementById('deleteProgressBar').style.width = percent + '%';
+        document.getElementById('deleteProgressText').textContent = state.clickCount + ' / ' + CONFIG.CLICKS_REQUIRED;
+        
+        var btnText = remaining > 0 ? 'Xóa (' + remaining + ')' : '🎉 XONG!';
+        document.getElementById('deleteBtnText').textContent = btnText;
+        document.getElementById('flyingBtnText').textContent = btnText;
+        
+        // Progress bar color
+        var bar = document.getElementById('deleteProgressBar');
+        if (percent < 30) bar.style.background = 'linear-gradient(90deg, #a855f7, #ec4899)';
+        else if (percent < 60) bar.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
+        else if (percent < 90) bar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+        else bar.style.background = 'linear-gradient(90deg, #dc2626, #7f1d1d)';
+        
+        // Random hint
+        if (state.clickCount > 0 && state.clickCount % 5 === 0) {
+            document.getElementById('deleteHint').textContent = hints[Math.floor(Math.random() * hints.length)];
+        }
+        
+        updateChallengeQueue();
+    }
+    
+    function updateChallengeQueue() {
+        var queue = document.getElementById('queueItems');
+        var items = [];
+        
+        var nextCaptcha = Math.ceil((state.clickCount + 1) / CONFIG.CAPTCHA_INTERVAL) * CONFIG.CAPTCHA_INTERVAL;
+        if (nextCaptcha <= CONFIG.CLICKS_REQUIRED) {
+            items.push('<span class="queue-item captcha">🔐 CAPTCHA tại click ' + nextCaptcha + '</span>');
+        }
+        
+        if (state.clickCount < CONFIG.MATH_START_AT) {
+            items.push('<span class="queue-item math">📐 TOÁN từ click ' + CONFIG.MATH_START_AT + '</span>');
+        } else {
+            items.push('<span class="queue-item math active">📐 TOÁN đang hoạt động!</span>');
+        }
+        
+        if (!state.typeDone) {
+            if (state.clickCount < CONFIG.TYPE_TRIGGER) {
+                items.push('<span class="queue-item type">⌨️ GÕ CHỮ tại click ' + CONFIG.TYPE_TRIGGER + '</span>');
+            }
+        } else {
+            items.push('<span class="queue-item type done">⌨️ GÕ CHỮ ✓ Hoàn thành</span>');
+        }
+        
+        items.push('<span class="queue-item flying">🎯 NÚT BAY mỗi click!</span>');
+        
+        queue.innerHTML = items.join('');
+    }
+    
+    // ==========================================
+    // NÚT BAY KHẮP MÀN HÌNH 🚀
+    // ==========================================
+    function moveButtonToRandom() {
+        var btn = document.getElementById('flyingDeleteBtn');
+        var modalBtn = document.getElementById('confirmDeleteBtn');
+        
+        // Ẩn nút trong modal, hiện nút bay
+        modalBtn.style.visibility = 'hidden';
+        btn.style.display = 'flex';
+        state.buttonIsFlying = true;
+        
+        // Random position trên màn hình
+        var padding = 80;
+        var btnWidth = 150;
+        var btnHeight = 50;
+        var maxX = window.innerWidth - btnWidth - padding;
+        var maxY = window.innerHeight - btnHeight - padding;
+        
+        var randomX = padding + Math.random() * maxX;
+        var randomY = padding + Math.random() * maxY;
+        
+        btn.style.left = randomX + 'px';
+        btn.style.top = randomY + 'px';
+        
+        // Hiển thị countdown quay lại
+        document.getElementById('returnCountdown').style.display = 'block';
+        startReturnCountdown();
+    }
+    
+    function returnButtonToModal() {
+        var btn = document.getElementById('flyingDeleteBtn');
+        var modalBtn = document.getElementById('confirmDeleteBtn');
+        
+        btn.style.display = 'none';
+        modalBtn.style.visibility = 'visible';
+        state.buttonIsFlying = false;
+        
+        document.getElementById('returnCountdown').style.display = 'none';
+        clearInterval(state.returnCountdown);
+        clearTimeout(state.returnTimer);
+    }
+    
+    function startReturnCountdown() {
+        clearInterval(state.returnCountdown);
+        clearTimeout(state.returnTimer);
+        
+        var timeLeft = CONFIG.BUTTON_RETURN_SECONDS;
+        document.getElementById('returnTime').textContent = timeLeft;
+        
+        state.returnCountdown = setInterval(function() {
+            timeLeft--;
+            document.getElementById('returnTime').textContent = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(state.returnCountdown);
+            }
+        }, 1000);
+        
+        state.returnTimer = setTimeout(function() {
+            returnButtonToModal();
+        }, CONFIG.BUTTON_RETURN_SECONDS * 1000);
+    }
+    
+    // ==========================================
+    // CHALLENGE SYSTEM
+    // ==========================================
+    function addChallenge(type) {
+        if (state.pendingChallenges.indexOf(type) === -1) {
+            state.pendingChallenges.push(type);
+        }
+    }
+    
+    function processNextChallenge() {
+        if (state.pendingChallenges.length === 0) {
+            enableDeleteButton();
+            return;
+        }
+        
+        var challenge = state.pendingChallenges.shift();
+        
+        switch(challenge) {
+            case 'captcha':
+                showCaptcha();
+                break;
+            case 'math':
+                showMath();
+                break;
+            case 'type':
+                showType();
+                break;
+            case 'cooldown':
+                startCooldown();
+                break;
+        }
+    }
+    
+    function disableDeleteButton() {
+        document.getElementById('confirmDeleteBtn').disabled = true;
+        document.getElementById('flyingDeleteBtn').disabled = true;
+    }
+    
+    function enableDeleteButton() {
+        document.getElementById('confirmDeleteBtn').disabled = false;
+        document.getElementById('flyingDeleteBtn').disabled = false;
+    }
+    
+    // ==========================================
+    // CAPTCHA 🔐
+    // ==========================================
+    function showCaptcha() {
+        state.currentCaptcha = generateCaptcha();
+        document.getElementById('captchaDisplay').textContent = state.currentCaptcha;
+        document.getElementById('captchaInput').value = '';
+        document.getElementById('captchaError').style.display = 'none';
+        document.getElementById('captchaChallenge').style.display = 'block';
+        disableDeleteButton();
+        document.getElementById('deleteHint').textContent = '🔐 Nhập CAPTCHA để tiếp tục!';
+        
+        // Focus vào input
+        setTimeout(function() {
+            document.getElementById('captchaInput').focus();
+        }, 100);
+    }
+    
+    function hideCaptcha() {
+        document.getElementById('captchaChallenge').style.display = 'none';
+    }
+    
+    document.getElementById('captchaSubmit').addEventListener('click', function() {
+        var input = document.getElementById('captchaInput').value.toUpperCase().trim();
+        if (input === state.currentCaptcha) {
+            hideCaptcha();
+            document.getElementById('deleteHint').textContent = '✅ CAPTCHA đúng!';
+            processNextChallenge();
+        } else {
+            document.getElementById('captchaError').style.display = 'block';
+            state.currentCaptcha = generateCaptcha();
+            document.getElementById('captchaDisplay').textContent = state.currentCaptcha;
+            document.getElementById('captchaInput').value = '';
+            document.getElementById('captchaInput').focus();
+        }
+    });
+    
+    // ==========================================
+    // TOÁN TÌNH YÊU 📐💕
+    // ==========================================
+    function showMath() {
+        state.currentMath = getRandomMath();
+        document.getElementById('mathProblem').innerHTML = state.currentMath.q;
+        document.getElementById('mathHint').textContent = '💡 ' + state.currentMath.hint;
+        document.getElementById('mathHint').style.display = 'none';
+        document.getElementById('mathInput').value = '';
+        document.getElementById('mathError').style.display = 'none';
+        document.getElementById('mathChallenge').style.display = 'block';
+        disableDeleteButton();
+        document.getElementById('deleteHint').textContent = '📐 Giải toán tình yêu để tiếp tục!';
+        
+        setTimeout(function() {
+            document.getElementById('mathInput').focus();
+        }, 100);
+    }
+    
+    function hideMath() {
+        document.getElementById('mathChallenge').style.display = 'none';
+    }
+    
+    document.getElementById('mathHintBtn').addEventListener('click', function() {
+        document.getElementById('mathHint').style.display = 'block';
+    });
+    
+    document.getElementById('mathSubmit').addEventListener('click', function() {
+        var input = document.getElementById('mathInput').value.toLowerCase().replace(/\s/g, '').replace(/,/g, '.');
+        var correct = false;
+        
+        for (var i = 0; i < state.currentMath.a.length; i++) {
+            var answer = state.currentMath.a[i].toLowerCase().replace(/\s/g, '').replace(/,/g, '.');
+            if (input === answer) {
+                correct = true;
+                break;
+            }
+        }
+        
+        if (correct) {
+            hideMath();
+            document.getElementById('deleteHint').textContent = '🎉 Đúng rồi! Tính toán giỏi ghê!';
+            processNextChallenge();
+        } else {
+            document.getElementById('mathError').style.display = 'block';
+            document.getElementById('mathHint').style.display = 'block';
+            document.getElementById('mathInput').focus();
+        }
+    });
+    
+    // ==========================================
+    // GÕ CHỮ ⌨️
+    // ==========================================
+    var REQUIRED_SENTENCE = "Tôi không muốn xóa kỷ niệm đẹp này";
+    
+    function showType() {
+        state.typeCount = 0;
+        document.getElementById('typeInput').value = '';
+        document.getElementById('typeProgress').textContent = '✅ 0 / ' + CONFIG.TYPE_REQUIRED + ' lần';
+        document.getElementById('typeError').style.display = 'none';
+        document.getElementById('typeChallenge').style.display = 'block';
+        disableDeleteButton();
+        document.getElementById('deleteHint').textContent = '⌨️ Gõ câu ' + CONFIG.TYPE_REQUIRED + ' lần!';
+        
+        setTimeout(function() {
+            document.getElementById('typeInput').focus();
+        }, 100);
+    }
+    
+    function hideType() {
+        document.getElementById('typeChallenge').style.display = 'none';
+    }
+    
+    document.getElementById('typeSubmit').addEventListener('click', function() {
+        var input = document.getElementById('typeInput').value.trim();
+        
+        if (input === REQUIRED_SENTENCE) {
+            state.typeCount++;
+            document.getElementById('typeProgress').textContent = '✅ ' + state.typeCount + ' / ' + CONFIG.TYPE_REQUIRED + ' lần';
+            document.getElementById('typeInput').value = '';
+            document.getElementById('typeError').style.display = 'none';
+            
+            if (state.typeCount >= CONFIG.TYPE_REQUIRED) {
+                state.typeDone = true;
+                hideType();
+                document.getElementById('deleteHint').textContent = '😤 Gõ xong! Quyết tâm ghê...';
+                processNextChallenge();
+            } else {
+                document.getElementById('typeInput').focus();
+            }
+        } else {
+            document.getElementById('typeError').style.display = 'block';
+            document.getElementById('typeInput').focus();
+        }
+    });
+    
+    // ==========================================
+    // COOLDOWN ⏱️
+    // ==========================================
+    function startCooldown() {
+        state.isOnCooldown = true;
+        disableDeleteButton();
+        
+        var timeLeft = CONFIG.COOLDOWN_SECONDS;
+        document.getElementById('cooldownDisplay').style.display = 'block';
+        document.getElementById('cooldownTime').textContent = timeLeft;
+        document.getElementById('cooldownProgress').style.width = '100%';
+        
+        state.cooldownTimer = setInterval(function() {
+            timeLeft--;
+            document.getElementById('cooldownTime').textContent = timeLeft;
+            document.getElementById('cooldownProgress').style.width = ((timeLeft / CONFIG.COOLDOWN_SECONDS) * 100) + '%';
+            
+            if (timeLeft <= 0) {
+                clearInterval(state.cooldownTimer);
+                state.isOnCooldown = false;
+                document.getElementById('cooldownDisplay').style.display = 'none';
+                processNextChallenge();
+            }
+        }, 1000);
+    }
+    
+    // ==========================================
+    // MAIN CLICK HANDLER 🖱️
+    // ==========================================
+    function handleDeleteClick() {
+        if (state.isOnCooldown || state.pendingChallenges.length > 0) return;
+        
+        state.clickCount++;
+        updateMainUI();
+        
+        // Reset return timer nếu đang bay
+        if (state.buttonIsFlying) {
+            clearInterval(state.returnCountdown);
+            clearTimeout(state.returnTimer);
+        }
+        
+        // Check hoàn thành
+        if (state.clickCount >= CONFIG.CLICKS_REQUIRED) {
+            document.getElementById('deleteHint').textContent = '🎉 HOÀN THÀNH! Đang xóa kỷ niệm...';
+            document.getElementById('returnCountdown').style.display = 'none';
+            disableDeleteButton();
+            
+            var flyBtn = document.getElementById('flyingDeleteBtn');
+            flyBtn.innerHTML = '🎉 XONG!';
+            flyBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            
+            setTimeout(function() {
+                window.location.href = state.deleteUrl;
+            }, 2000);
+            return;
+        }
+        
+        // Thêm challenges vào queue
+        state.pendingChallenges = [];
+        
+        // CAPTCHA mỗi 10 click
+        if (state.clickCount % CONFIG.CAPTCHA_INTERVAL === 0) {
+            addChallenge('captcha');
+        }
+        
+        // TOÁN từ click 50 trở đi, mỗi 10 click
+        if (state.clickCount >= CONFIG.MATH_START_AT && state.clickCount % CONFIG.CAPTCHA_INTERVAL === 0) {
+            addChallenge('math');
+        }
+        
+        // GÕ CHỮ tại click 50
+        if (state.clickCount === CONFIG.TYPE_TRIGGER && !state.typeDone) {
+            addChallenge('type');
+        }
+        
+        // Cooldown sau mỗi challenge batch
+        if (state.pendingChallenges.length > 0) {
+            addChallenge('cooldown');
+        }
+        
+        // Di chuyển nút bay khắp màn hình
+        moveButtonToRandom();
+        
+        // Process challenges
+        if (state.pendingChallenges.length > 0) {
+            processNextChallenge();
+        }
+    }
+    
+    // ==========================================
+    // EVENT LISTENERS
+    // ==========================================
+    
+    // Mở modal
+    document.querySelectorAll('.btn-delete-trigger').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            state.deleteUrl = this.getAttribute('data-delete-url');
+            state.clickCount = 0;
+            state.typeCount = 0;
+            state.typeDone = false;
+            state.pendingChallenges = [];
+            state.isOnCooldown = false;
+            
+            // Reset UI
+            hideCaptcha();
+            hideMath();
+            hideType();
+            returnButtonToModal();
+            document.getElementById('cooldownDisplay').style.display = 'none';
+            document.getElementById('returnCountdown').style.display = 'none';
+            document.getElementById('deleteHint').textContent = 'Bấm nút để bắt đầu hành trình địa ngục 💀';
+            enableDeleteButton();
+            
+            // Reset flying button style
+            var flyBtn = document.getElementById('flyingDeleteBtn');
+            flyBtn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+            
+            updateMainUI();
+            document.getElementById('deleteModal').classList.add('active');
+        });
+    });
+    
+    // Click nút xóa (trong modal)
+    document.getElementById('confirmDeleteBtn').addEventListener('click', handleDeleteClick);
+    
+    // Click nút bay
+    document.getElementById('flyingDeleteBtn').addEventListener('click', handleDeleteClick);
+    
+    // Cancel
+    document.getElementById('cancelDeleteBtn').addEventListener('click', function() {
+        document.getElementById('deleteModal').classList.remove('active');
+        returnButtonToModal();
+        clearInterval(state.cooldownTimer);
+        clearInterval(state.returnCountdown);
+        clearTimeout(state.returnTimer);
+    });
+    
+    // Click outside modal - KHÔNG đóng modal nữa (ác hơn 😈)
+    document.getElementById('deleteModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            // Không làm gì cả - không cho đóng bằng click outside
+            document.getElementById('deleteHint').textContent = '😈 Click ra ngoài không thoát được đâu!';
+        }
+    });
+    
+    // Enter keys
+    document.getElementById('captchaInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') document.getElementById('captchaSubmit').click();
+    });
+    document.getElementById('mathInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') document.getElementById('mathSubmit').click();
+    });
+    document.getElementById('typeInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') document.getElementById('typeSubmit').click();
+    });
+    
+    // ESC key - cũng không cho thoát 😈
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && document.getElementById('deleteModal').classList.contains('active')) {
+            e.preventDefault();
+            document.getElementById('deleteHint').textContent = '😈 ESC cũng không thoát được đâu!';
+        }
+    });
+</script>
+
+<style>
+    /* ==========================================
+       FLYING BUTTON - NÚT BAY KHẮP MÀN HÌNH 🚀
+       ========================================== */
+    .flying-delete-btn {
+        position: fixed;
+        z-index: 10001;
+        padding: 15px 30px;
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        border: none;
+        border-radius: 50px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 10px 40px rgba(239, 68, 68, 0.5);
+        transition: left 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55), 
+                    top 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55),
+                    transform 0.2s ease,
+                    box-shadow 0.2s ease;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Quicksand', sans-serif;
+        animation: pulse 1s infinite;
+        min-width: 140px;
+    }
+    
+    .flying-delete-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 15px 50px rgba(239, 68, 68, 0.7);
+    }
+    
+    .flying-delete-btn:active {
+        transform: scale(0.95);
+    }
+    
+    .flying-delete-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        animation: none;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { box-shadow: 0 10px 40px rgba(239, 68, 68, 0.5); }
+        50% { box-shadow: 0 10px 60px rgba(239, 68, 68, 0.8); }
+    }
+    
+    /* ==========================================
+       DELETE MODAL STYLES
+       ========================================== */
+    .delete-modal-content {
+        max-width: 520px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    .delete-header {
+        text-align: center;
+        margin-bottom: 15px;
+    }
+    
+    .delete-emoji {
+        font-size: 60px;
+        display: block;
+        margin-bottom: 10px;
+    }
+    
+    .delete-header h3 {
+        color: var(--primary-dark);
+        margin: 0 0 5px 0;
+    }
+    
+    .delete-tagline {
+        font-size: 14px;
+        color: #888;
+        font-style: italic;
+        margin: 0;
+    }
+    
+    #deleteMessage {
+        text-align: center;
+        color: var(--text-light);
+        margin-bottom: 15px;
+    }
+    
+    /* Progress bar */
+    .delete-progress-container {
+        background: #f0f0f0;
+        border-radius: 20px;
+        height: 30px;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 15px;
+    }
+    
+    .delete-progress-bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .delete-progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-weight: 700;
+        font-size: 14px;
+        color: #333;
+        text-shadow: 0 0 10px white;
+    }
+    
+    /* Challenge queue */
+    .challenge-queue {
+        background: #fefce8;
+        border: 2px solid #fde047;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+    
+    .queue-title {
+        font-weight: 700;
+        color: #854d0e;
+        margin-bottom: 8px;
+        font-size: 13px;
+    }
+    
+    .queue-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    
+    .queue-item {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .queue-item.captcha { background: #dbeafe; color: #1e40af; }
+    .queue-item.math { background: #f3e8ff; color: #7c3aed; }
+    .queue-item.math.active { background: #7c3aed; color: white; }
+    .queue-item.type { background: #dcfce7; color: #166534; }
+    .queue-item.type.done { background: #166534; color: white; }
+    .queue-item.flying { background: #fee2e2; color: #dc2626; }
+    
+    /* Challenge boxes */
+    .challenge-box {
+        background: #f8fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 15px;
+        text-align: center;
+    }
+    
+    .challenge-header {
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+    
+    .captcha-header { background: #dbeafe; color: #1e40af; }
+    .math-header { background: #f3e8ff; color: #7c3aed; }
+    .type-header { background: #dcfce7; color: #166534; }
+    
+    .captcha-display {
+        font-family: 'Courier New', monospace;
+        font-size: 32px;
+        font-weight: bold;
+        letter-spacing: 8px;
+        background: linear-gradient(135deg, #1e293b, #334155);
+        color: #22d3ee;
+        padding: 15px 25px;
+        border-radius: 8px;
+        margin: 15px 0;
+        text-align: center;
+        user-select: none;
+        text-shadow: 0 0 10px #22d3ee;
+    }
+    
+    .math-problem {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-dark);
+        padding: 15px;
+        background: white;
+        border-radius: 8px;
+        border-left: 4px solid #7c3aed;
+        margin-bottom: 15px;
+        text-align: center;
+        line-height: 1.6;
+    }
+    
+    .type-sentence {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--primary-dark);
+        background: white;
+        padding: 12px;
+        border-radius: 8px;
+        margin: 10px 0;
+        border: 2px dashed var(--primary-light);
+        text-align: center;
+    }
+    
+    .challenge-box input,
+    .challenge-box textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 16px;
+        margin-bottom: 10px;
+        font-family: 'Quicksand', sans-serif;
+        box-sizing: border-box;
+    }
+    
+    .challenge-box input:focus,
+    .challenge-box textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+    
+    .btn-challenge {
+        width: 100%;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        border: none;
+        padding: 12px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: 'Quicksand', sans-serif;
+    }
+    
+    .btn-challenge:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(255, 107, 157, 0.4);
+    }
+    
+    .btn-hint {
+        margin-top: 10px;
+        background: none;
+        border: 1px dashed #ccc;
+        padding: 8px 15px;
+        border-radius: 8px;
+        color: #888;
+        cursor: pointer;
+        font-size: 13px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-hint:hover {
+        background: #f5f5f5;
+        color: #666;
+    }
+    
+    .challenge-error {
+        color: #ef4444;
+        font-size: 14px;
+        margin-top: 10px;
+    }
+    
+    .math-hint {
+        color: #059669;
+        font-size: 13px;
+        font-style: italic;
+        margin-top: 10px;
+        padding: 10px;
+        background: #ecfdf5;
+        border-radius: 8px;
+    }
+    
+    .type-progress {
+        font-size: 14px;
+        color: #059669;
+        font-weight: 600;
+        margin-top: 10px;
+    }
+    
+    /* Cooldown */
+    .cooldown-display {
+        text-align: center;
+        margin-bottom: 15px;
+        padding: 15px;
+        background: #fef3c7;
+        border-radius: 12px;
+    }
+    
+    .cooldown-display p {
+        color: #b45309;
+        font-weight: 600;
+        margin: 0 0 10px 0;
+    }
+    
+    .cooldown-bar {
+        background: #fde68a;
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .cooldown-progress {
+        height: 100%;
+        background: linear-gradient(90deg, #f59e0b, #d97706);
+        transition: width 1s linear;
+    }
+    
+    /* Return countdown */
+    .return-countdown {
+        text-align: center;
+        padding: 12px;
+        background: #fee2e2;
+        border-radius: 12px;
+        margin-bottom: 15px;
+    }
+    
+    .return-countdown p {
+        margin: 0;
+        color: #dc2626;
+        font-weight: 600;
+    }
+    
+    .return-hint {
+        font-size: 12px !important;
+        color: #ef4444 !important;
+        margin-top: 5px !important;
+        font-style: italic;
+    }
+    
+    /* Hint */
+    .delete-hint {
+        text-align: center;
+        font-size: 13px;
+        color: var(--text-light);
+        margin-bottom: 20px;
+        font-style: italic;
+        min-height: 20px;
+    }
+    
+    /* Modal actions */
+    .modal-actions {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+    
+    .btn-keep {
+        flex: 2;
+        padding: 15px 25px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: 'Quicksand', sans-serif;
+    }
+    
+    .btn-keep:hover {
+        transform: scale(1.05);
+        box-shadow: 0 5px 20px rgba(255, 107, 157, 0.4);
+    }
+    
+    .delete-btn-container {
+        flex: 1;
+    }
+    
+    .btn-delete-confirm {
+        width: 100%;
+        padding: 15px 20px;
+        background: #f5f5f5;
+        color: #999;
+        border: 2px dashed #ddd;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        font-family: 'Quicksand', sans-serif;
+    }
+    
+    .btn-delete-confirm:hover:not(:disabled) {
+        background: #fee2e2;
+        border-color: #fca5a5;
+        color: #ef4444;
+    }
+    
+    .btn-delete-confirm:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    /* Entry actions */
+    .entry-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .btn-edit {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+    
+    .btn-edit:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
+    }
+    
+    .btn-delete-trigger {
+        background: none;
+        border: none;
+        color: #ddd;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        opacity: 0;
+    }
+    
+    .diary-entry:hover .btn-delete-trigger {
+        opacity: 1;
+    }
+    
+    .btn-delete-trigger:hover {
+        background: #fee2e2;
+        color: #ef4444;
+    }
+    
+    /* Responsive */
+    @media (max-width: 480px) {
+        .flying-delete-btn {
+            padding: 12px 20px;
+            font-size: 14px;
+            min-width: 120px;
+        }
+        
+        .modal-actions {
+            flex-direction: column;
+        }
+        
+        .btn-keep, .delete-btn-container {
+            width: 100%;
+            flex: none;
+        }
+    }
+</style>
+{% endblock %}

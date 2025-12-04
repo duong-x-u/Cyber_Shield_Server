@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="hero-content">
+        <h1 class="hero-title">
+            <span class="script-font">Our Love Story</span>
+        </h1>
+        <p class="hero-subtitle">Bắt đầu từ 15:51 - 28/11/2025</p>
+
+        <!-- Love Counter -->
+        <div class="love-counter">
+            <h2>Chúng mình đã yêu nhau được</h2>
+            <div class="counter-display" id="loveCounter">
+                <div class="counter-item">
+                    <span class="counter-number" id="years">{{ duration.years }}</span>
+                    <span class="counter-label">Năm</span>
+                </div>
+                <div class="counter-item">
+                    <span class="counter-number" id="months">{{ duration.months }}</span>
+                    <span class="counter-label">Tháng</span>
+                </div>
+                <div class="counter-item">
+                    <span class="counter-number" id="days">{{ duration.days }}</span>
+                    <span class="counter-label">Ngày</span>
+                </div>
+                <div class="counter-item">
+                    <span class="counter-number" id="hours">{{ duration.hours }}</span>
+                    <span class="counter-label">Giờ</span>
+                </div>
+                <div class="counter-item">
+                    <span class="counter-number" id="minutes">{{ duration.minutes }}</span>
+                    <span class="counter-label">Phút</span>
+                </div>
+                <div class="counter-item">
+                    <span class="counter-number" id="seconds">{{ duration.seconds }}</span>
+                    <span class="counter-label">Giây</span>
+                </div>
+            </div>
+            <p class="total-days">Tổng cộng: <strong id="totalDays">{{ duration.total_days }}</strong> ngày bên nhau 💕</p>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Grid -->
+<div class="dashboard">
+    <!-- Upcoming Milestones -->
+    <div class="dashboard-card upcoming-card">
+        <div class="card-header">
+            <h3><i class="fas fa-calendar-star"></i> Sắp tới</h3>
+        </div>
+        <div class="card-content">
+            {% if upcoming %}
+                {% for item in upcoming %}
+                <div class="upcoming-item">
+                    <div class="upcoming-icon">
+                        <i class="fas fa-heart"></i>
+                    </div>
+                    <div class="upcoming-info">
+                        <span class="upcoming-title">{{ item.title }}</span>
+                        <span class="upcoming-date">{{ item.date.strftime('%d/%m/%Y') }}</span>
+                    </div>
+                    <div class="upcoming-countdown">
+                        <span class="days-left">{{ item.days_left }}</span>
+                        <span class="days-label">ngày</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty-message">Chưa có kỷ niệm nào sắp tới</p>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('milestones') }}" class="card-link">Xem tất cả →</a>
+    </div>
+
+    <!-- Recent Photos -->
+    <div class="dashboard-card photos-card">
+        <div class="card-header">
+            <h3><i class="fas fa-camera-retro"></i> Ảnh gần đây</h3>
+        </div>
+        <div class="card-content">
+            <div class="photo-grid-small">
+                {% if recent_photos %}
+                    {% for photo in recent_photos %}
+                    <div class="photo-thumb">
+                        <img src="{{ url_for('static', filename='uploads/' + photo.filename) }}" alt="{{ photo.caption }}">
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty-message">Chưa có ảnh nào</p>
+                {% endif %}
+            </div>
+        </div>
+        <a href="{{ url_for('gallery') }}" class="card-link">Xem tất cả →</a>
+    </div>
+
+    <!-- Recent Diary -->
+    <div class="dashboard-card diary-card">
+        <div class="card-header">
+            <h3><i class="fas fa-feather-alt"></i> Nhật ký gần đây</h3>
+        </div>
+        <div class="card-content">
+            {% if recent_diary %}
+                {% for entry in recent_diary %}
+                <div class="diary-preview">
+                    <div class="diary-mood">
+                        {% if entry.mood == 'happy' %}😊
+                        {% elif entry.mood == 'love' %}😍
+                        {% elif entry.mood == 'excited' %}🥰
+                        {% elif entry.mood == 'sad' %}😢
+                        {% else %}💕{% endif %}
+                    </div>
+                    <div class="diary-info">
+                        <span class="diary-title">{{ entry.title }}</span>
+                        <span class="diary-date">{{ entry.date.strftime('%d/%m/%Y') }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="empty-message">Chưa có nhật ký nào</p>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('diary') }}" class="card-link">Xem tất cả →</a>
+    </div>
+
+    <!-- Love Stats -->
+    <div class="dashboard-card stats-card">
+        <div class="card-header">
+            <h3><i class="fas fa-chart-heart"></i> Thống kê tình yêu</h3>
+        </div>
+        <div class="card-content">
+            <div class="stat-item">
+                <i class="fas fa-heart"></i>
+                <span class="stat-value">{{ (duration.total_days * 24 * 60)|int }}</span>
+                <span class="stat-label">Phút bên nhau</span>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-kiss-wink-heart"></i>
+                <span class="stat-value">∞</span>
+                <span class="stat-label">Nụ hôn</span>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-hand-holding-heart"></i>
+                <span class="stat-value">{{ duration.total_days }}</span>
+                <span class="stat-label">Ngày hạnh phúc</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Real-time counter
+    const startDate = new Date('2025-11-28T15:51:00');
+    
+    function updateCounter() {
+        const now = new Date();
+        const diff = now - startDate;
+        
+        const totalSeconds = Math.floor(diff / 1000);
+        const totalDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const years = Math.floor(totalDays / 365);
+        const months = Math.floor((totalDays % 365) / 30);
+        const days = (totalDays % 365) % 30;
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        document.getElementById('years').textContent = years;
+        document.getElementById('months').textContent = months;
+        document.getElementById('days').textContent = days;
+        document.getElementById('hours').textContent = hours;
+        document.getElementById('minutes').textContent = minutes;
+        document.getElementById('seconds').textContent = seconds;
+        document.getElementById('totalDays').textContent = totalDays.toLocaleString();
+    }
+    
+    setInterval(updateCounter, 1000);
+    updateCounter();
+</script>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-edit"></i> Chỉnh sửa nhật ký</h1>
+    <p>Sửa lại kỷ niệm cho đẹp hơn nè~</p>
+</div>
+
+<div class="add-section">
+    <form class="add-form" style="display: block;" action="{{ url_for('edit_diary', id=entry.id) }}" method="POST">
+        <div class="form-group">
+            <label for="title">Tiêu đề</label>
+            <input type="text" id="title" name="title" required value="{{ entry.title }}">
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="date">Ngày</label>
+                <input type="date" id="date" name="date" value="{{ entry.date.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="form-group">
+                <label for="mood">Tâm trạng</label>
+                <select id="mood" name="mood">
+                    <option value="love" {{ 'selected' if entry.mood == 'love' }}>😍 Yêu</option>
+                    <option value="happy" {{ 'selected' if entry.mood == 'happy' }}>😊 Vui</option>
+                    <option value="excited" {{ 'selected' if entry.mood == 'excited' }}>🥰 Hạnh phúc</option>
+                    <option value="grateful" {{ 'selected' if entry.mood == 'grateful' }}>🙏 Biết ơn</option>
+                    <option value="romantic" {{ 'selected' if entry.mood == 'romantic' }}>💕 Lãng mạn</option>
+                    <option value="miss" {{ 'selected' if entry.mood == 'miss' }}>💭 Nhớ</option>
+                    <option value="sad" {{ 'selected' if entry.mood == 'sad' }}>😢 Buồn</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="content">Nội dung</label>
+            <textarea id="content" name="content" rows="8" required>{{ entry.content }}</textarea>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-save"></i> Lưu thay đổi
+            </button>
+            <a href="{{ url_for('diary') }}" class="btn-secondary">Hủy</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💕 {% block title %}Our Love Story{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Floating hearts background -->
+    <div class="floating-hearts">
+        <div class="heart">💕</div>
+        <div class="heart">💖</div>
+        <div class="heart">💗</div>
+        <div class="heart">💓</div>
+        <div class="heart">💝</div>
+        <div class="heart">💕</div>
+        <div class="heart">💖</div>
+        <div class="heart">💗</div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="{{ url_for('index') }}">
+                <span class="logo">💑</span>
+                <span class="brand-text">Our Love</span>
+            </a>
+        </div>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">
+                <i class="fas fa-home"></i> Trang chủ
+            </a></li>
+            <li><a href="{{ url_for('diary') }}" class="{{ 'active' if request.endpoint == 'diary' }}">
+                <i class="fas fa-book-heart"></i> Nhật ký
+            </a></li>
+            <li><a href="{{ url_for('gallery') }}" class="{{ 'active' if request.endpoint == 'gallery' }}">
+                <i class="fas fa-images"></i> Ảnh
+            </a></li>
+            <li><a href="{{ url_for('milestones') }}" class="{{ 'active' if request.endpoint == 'milestones' }}">
+                <i class="fas fa-calendar-heart"></i> Kỷ niệm
+            </a></li>
+        </ul>
+        <button class="nav-toggle" id="navToggle">
+            <i class="fas fa-bars"></i>
+        </button>
+    </nav>
+
+    <!-- Main content -->
+    <main class="main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                    {% for category, message in messages %}
+                        <li class="{{ category }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>Made with 💖 for us</p>
+        <p class="start-date">Bắt đầu từ: 28/11/2025 - 15:51</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

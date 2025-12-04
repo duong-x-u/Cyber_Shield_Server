@@ -1,0 +1,25 @@
+/* Lo-fi Night Theme */
+
+.theme-lofi_night .app-wrapper {
+    /* A real implementation could use a GIF background */
+    /* background-image: url('path/to/lofi-rain.gif'); */
+    background-color: #0d0f1a;
+    background-size: cover;
+    background-position: center;
+}
+
+.theme-lofi_night {
+    --bg-main: #141622;
+    --bg-primary: #191c29;
+    --bg-secondary: #212538;
+    --bg-tertiary: #2f344f;
+    --bg-hover: #3c4264;
+    --accent: #a37dff;
+    --accent-hover: #8c66e0;
+    --text-primary: #d8d8e6;
+    --text-secondary: #8c90b3;
+    --text-muted: #5a5e7a;
+    --received-bg: #212538;
+    --sent-bg: linear-gradient(135deg, #5b3a9e, #8a5fff);
+    --border-color: #2f344f;
+}
