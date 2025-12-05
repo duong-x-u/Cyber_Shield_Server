@@ -587,16 +587,52 @@ def handle_message(data):
 
 def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
     try:
-        # 1. Get AI response (the "thinking" part, no typing indicator)
+        conv = get_conversation(conv_id)
+        if not conv: return
+
+        # --- PHASE 1: HUMAN READING BEHAVIOR (SEEN) ---
+        # Simulate time to pick up phone/read message
+        # Fast if online recently, slower if not
+        read_delay = random.uniform(0.5, 2.5)
+        socketio.sleep(read_delay)
+
+        # Mark as SEEN (Updates DB and notifies Client to show small avatar)
+        mark_messages_seen(conv_id, 'user')
+        socketio.emit('messages_seen', {'conversation_id': conv_id}, room=str(conv_id))
+
+        # --- PHASE 2: GHOSTING / PROCESSING DELAY (SEEN CHÙA) ---
+        mood = conv.get('mood', 70)
+        busy_status = conv.get('busy_status', 'rảnh')
+        
+        # Base processing delay (Thinking time)
+        ghost_delay = random.uniform(1.5, 3.0)
+
+        # Mood impacts delay logic
+        if mood < 30: 
+            # Sad/Angry/Tired: Low energy -> Ignore for a while (Seen chùa)
+            ghost_delay = random.uniform(5.0, 12.0)
+        elif mood > 90:
+            # Hyper/Happy: Quick reply OR "Chanh sa" delay (unpredictable)
+            ghost_delay = random.uniform(1.0, 3.0) if random.random() > 0.3 else random.uniform(4.0, 8.0)
+        elif mood == 36:
+            # Chaos mode (Lãnh địa 36): Extremely unpredictable
+            ghost_delay = random.uniform(0.5, 15.0)
+
+        # Busy status impacts delay significantly
+        if busy_status != 'rảnh':
+             # If busy but decided to reply (filtered in get_ai_response), take longer
+             ghost_delay += random.uniform(3.0, 8.0)
+
+        socketio.sleep(ghost_delay)
+
+        # --- PHASE 3: GENERATE CONTENT ---
+        # 1. Get AI response (The thinking part)
         ai_action = get_ai_response(conv_id, user_message)
 
         if ai_action.get('action') == 'no_reply':
             return
 
-        conv = get_conversation(conv_id)
-        busy_status = conv.get('busy_status') if conv else None
-
-        # 40% chance to not reply if napping
+        # 40% chance to not reply if napping (Double check safety)
         if busy_status == 'Ngủ trưa' and random.random() < 0.4:
             print(f"😪 AI is napping, ignoring message for conv {conv_id}")
             return
@@ -613,31 +649,44 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
 
         any_message_sent = False
 
-        # 2. Add a "thinking/reading" delay before the first message part
-        socketio.sleep(random.uniform(1.0, 2.0))
+        # --- PHASE 4: HUMAN TYPING BEHAVIOR ---
+        
+        # Typing Speed Modulator based on Mood
+        # Standard: ~0.07s per char
+        typing_speed_mod = 0.07 
+        if mood > 80: typing_speed_mod = 0.04 # Excited -> Fast typing
+        if mood < 30: typing_speed_mod = 0.12 # Sad/Tired -> Slow typing
+        if mood == 36: typing_speed_mod = random.uniform(0.02, 0.15) # Chaos
 
-        for raw_content in contents:
+        # Hesitation (Typing start... then stop... then start again)
+        # Occurs if mood is low (< 40) or random chance (20%)
+        if (mood < 40 or random.random() < 0.2) and len(contents) > 0:
+            socketio.emit('typing_start', room=str(conv_id))
+            socketio.sleep(random.uniform(1.5, 4.0)) # Pretend to type
+            socketio.emit('typing_stop', room=str(conv_id)) # Stop (Delete text or thinking)
+            socketio.sleep(random.uniform(1.0, 3.0)) # Wait
+
+        for i, raw_content in enumerate(contents):
             if not isinstance(raw_content, str) or not raw_content.strip():
                 continue
 
             human_msgs = split_into_human_messages(raw_content)
 
-            for i, msg in enumerate(human_msgs):
-                # If this isn't the first message in a multi-part response, add a small pause
-                if i > 0:
-                    socketio.sleep(random.uniform(0.8, 1.5))
+            for j, msg in enumerate(human_msgs):
+                # If this isn't the very first message bubble, add a small pause between bubbles
+                if i > 0 or j > 0:
+                    socketio.sleep(random.uniform(0.5, 1.2))
 
-                # 3. New Typing Simulation
-                # A fast typist is ~80 WPM. 80 words * 5 chars/word = 400 chars/min.
-                # 60s / 400 chars = 0.15s/char. Let's use something faster for chat.
-                typing_duration = len(msg) * 0.07 + random.uniform(0.3, 0.8) # Base time + random "pause" 
-                typing_duration = max(0.5, min(typing_duration, 4.0)) # Clamp between 0.5s and 4.0s
+                # Calculate typing duration
+                # Base time + length * speed_mod
+                typing_duration = len(msg) * typing_speed_mod + random.uniform(0.3, 0.8) 
+                typing_duration = max(0.6, min(typing_duration, 6.0)) # Clamp between 0.6s and 6s
 
                 socketio.emit('typing_start', room=str(conv_id))
                 socketio.sleep(typing_duration)
                 socketio.emit('typing_stop', room=str(conv_id))
 
-                # 4. Send message
+                # Send message
                 ai_msg_id = save_message(conv_id, 'assistant', ai_name, msg)
                 socketio.emit('new_message', {
                     'id': ai_msg_id,
@@ -651,7 +700,7 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
 
         # 5. Handle reaction if requested
         if ai_action.get('emoji') and user_msg_id:
-            socketio.sleep(0.2) # Small delay before reacting
+            socketio.sleep(random.uniform(0.2, 1.0)) # Small delay before reacting
             update_message_reactions(user_msg_id, [ai_action['emoji']])
             socketio.emit('reaction_updated', {
                 'message_id': user_msg_id,

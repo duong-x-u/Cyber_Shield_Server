@@ -187,6 +187,18 @@ socket.on('reaction_updated', data => {
     renderMessages(state.messages);
 });
 
+socket.on('messages_seen', () => {
+    let changed = false;
+    // Mark all user messages as seen (since AI reads everything up to now)
+    state.messages.forEach(m => {
+        if (m.role === 'user' && !m.is_seen) {
+            m.is_seen = 1;
+            changed = true;
+        }
+    });
+    if (changed) renderMessages(state.messages);
+});
+
 socket.on('search_results', data => {
     renderSearchResults(data.results, data.query);
 });
