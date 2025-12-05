@@ -1,5 +1,5 @@
 /* ========== VARIABLES ========== */
-:root {
+.default-theme {
     --bg-main: #0a0a0a;
     --bg-primary: #0f0f0f;
     --bg-secondary: #1a1a1a;
@@ -24,11 +24,17 @@
     --bg-secondary: #f5f5f5;
     --bg-tertiary: #e4e6eb;
     --bg-hover: #d8dadf;
+    --accent: #0084ff;
+    --accent-hover: #0073e6;
     --text-primary: #1c1e21;
     --text-secondary: #606770;
     --text-muted: #8a8d91;
     --received-bg: #e4e6eb;
+    --sent-bg: linear-gradient(135deg, #0084ff, #0066cc);
     --border-color: #dddfe2;
+    --success: #4caf50;
+    --danger: #f44336;
+    --sidebar-width: 300px;
 }
 
 * {
@@ -515,10 +521,6 @@ body {
     width: 22px;
     height: 22px;
 }
-
-/* Theme toggle */
-.dark-theme .icon-moon { display: none; }
-.light-theme .icon-sun { display: none; }
 
 /* Sound toggle */
 body[data-sound="true"] .icon-sound-off { display: none; }

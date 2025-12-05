@@ -1,9 +1,9 @@
-// ========== SOCKET CONNECTION ==========
+// ========== SOCKET CONNECTION ========== 
 const socket = io(window.location.origin, {
     path: '/duongdev/minhthy/socket.io'
 });
 
-// ========== DOM ELEMENTS ==========
+// ========== DOM ELEMENTS ========== 
 const elements = {
     sidebar: document.getElementById('sidebar'),
     conversationList: document.getElementById('conversationList'),
@@ -47,15 +47,13 @@ const elements = {
     moodValue: document.getElementById('moodValue'),
     messageCount: document.getElementById('messageCount'),
     deleteConvBtn: document.getElementById('deleteConvBtn'),
-    themeToggle: document.getElementById('themeToggle'),
     soundToggle: document.getElementById('soundToggle'),
     reactionPicker: document.getElementById('reactionPicker'),
     notificationSound: document.getElementById('notificationSound'),
-    themeOptions: document.querySelector('.theme-options'),
-    themeButtons: document.querySelectorAll('.theme-btn')
+    themeOptions: document.getElementById('themeOptions'),
 };
 
-// ========== STATE & CONFIG ==========
+// ========== STATE & CONFIG ========== 
 const AVATAR_URL = document.body.dataset.avatarUrl;
 
 let state = {
@@ -67,10 +65,9 @@ let state = {
     soundEnabled: true,
     isConnected: false,
     currentTheme: 'default',
-    currentDefaultMode: 'dark'
 };
 
-// ========== SOCKET EVENTS ==========
+// ========== SOCKET EVENTS ========== 
 socket.on('connect', () => {
     state.isConnected = true;
     console.log('✅ Connected');
@@ -96,12 +93,15 @@ socket.on('init_data', data => {
     }
 
     elements.messageCount.textContent = data.message_count;
-
+    
+    // Set initial theme and sound state from loaded settings
     state.currentTheme = state.settings.theme || 'default';
-    state.currentDefaultMode = state.settings.default_mode || 'dark';
-
-    applyTheme(state.currentTheme, state.currentDefaultMode);
-    applySoundSetting(state.settings.sound_enabled !== 'false');
+    applySoundSetting(state.settings.sound_enabled !== 'false', false); // Don't save on init
+    
+    // Fetch themes and then apply the loaded theme
+    fetchThemes().then(() => {
+        applyTheme(state.currentTheme);
+    });
 
     renderConversations();
     renderMessages(state.messages);
@@ -193,15 +193,10 @@ socket.on('search_results', data => {
 
 socket.on('setting_updated', data => {
     state.settings[data.key] = data.value;
-
     if (data.key === 'theme') {
-        state.currentTheme = data.value;
-        applyTheme(state.currentTheme, state.currentDefaultMode);
+        applyTheme(data.value);
     } else if (data.key === 'sound_enabled') {
-        applySoundSetting(data.value === 'true');
-    } else if (data.key === 'default_mode') {
-        state.currentDefaultMode = data.value;
-        if (state.currentTheme === 'default') applyTheme('default', state.currentDefaultMode);
+        applySoundSetting(data.value === 'true', false); // Don't re-save
     }
 });
 
@@ -222,7 +217,7 @@ socket.on('ai_presence_updated', data => {
     }
 });
 
-// ========== RENDER FUNCTIONS ==========
+// ========== RENDER FUNCTIONS ========== 
 function renderConversations() {
     elements.conversationList.innerHTML = state.conversations
         .map(conv => `
@@ -381,7 +376,7 @@ function createMessageHTML(msg) {
     `;
 }
 
-// ========== MESSAGE SENDING ==========
+// ========== MESSAGE SENDING ========== 
 function sendMessage() {
     const content = elements.messageInput.value.trim();
     if (!content || !state.isConnected || !state.currentConversationId) return;
@@ -419,7 +414,7 @@ function sendMessage() {
     elements.messageInput.focus();
 }
 
-// ========== MESSAGE HANDLERS ==========
+// ========== MESSAGE HANDLERS ========== 
 function attachMessageHandlers() {
     document.querySelectorAll('.message-bubble').forEach(bubble => {
         bubble.addEventListener('dblclick', e => {
@@ -445,35 +440,54 @@ function attachMessageHandlers() {
     });
 }
 
-// ========== SEARCH ==========
+// ========== SEARCH ========== 
 function renderSearchResults(results, query) {
     if (results.length === 0) {
         elements.searchResults.innerHTML = `<div class="no-results">Không tìm thấy kết quả cho "${escapeHtml(query)}"</div>`;
-    } else {
-        elements.searchResults.innerHTML = results
-            .map(msg => {
-                const highlighted = msg.content.replace(
-                    new RegExp(`(${escapeRegex(query)})`, 'gi'),
-                    '<mark>$1</mark>'
-                );
-                return `
-                    <div class="search-result-item" data-id="${msg.id}">
-                        <div class="result-sender">${escapeHtml(msg.sender_name)}</div>
-                        <div class="result-content">${highlighted}</div>
-                    </div>
-                `;
-            })
-            .join('');
-
-        document.querySelectorAll('.search-result-item').forEach(item => {
-            item.addEventListener('click', () => {
-                navigateToMessage(parseInt(item.dataset.id));
-                elements.searchResults.classList.remove('active');
-                elements.searchBar.classList.remove('active');
-                elements.searchInput.value = '';
-            });
-        });
+        elements.searchResults.classList.add('active');
+        return;
     }
+
+    const queryLower = query.toLowerCase();
+    elements.searchResults.innerHTML = results
+        .map(msg => {
+            const content = msg.content;
+            const contentLower = content.toLowerCase();
+            let highlighted = '';
+
+            if (!queryLower || queryLower.length === 0) {
+                highlighted = escapeHtml(content);
+            } else {
+                let lastIndex = 0;
+                const parts = [];
+                let index = contentLower.indexOf(queryLower, lastIndex);
+                while (index !== -1) {
+                    parts.push(escapeHtml(content.substring(lastIndex, index)));
+                    parts.push(`<mark>${escapeHtml(content.substring(index, index + query.length))}</mark>`);
+                    lastIndex = index + query.length;
+                    index = contentLower.indexOf(queryLower, lastIndex);
+                }
+                parts.push(escapeHtml(content.substring(lastIndex)));
+                highlighted = parts.join('');
+            }
+
+            return `
+                <div class="search-result-item" data-id="${msg.id}">
+                    <div class="result-sender">${escapeHtml(msg.sender_name)}</div>
+                    <div class="result-content">${highlighted}</div>
+                </div>
+            `;
+        })
+        .join('');
+
+    document.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('click', () => {
+            navigateToMessage(parseInt(item.dataset.id));
+            elements.searchResults.classList.remove('active');
+            elements.searchBar.classList.remove('active');
+            elements.searchInput.value = '';
+        });
+    });
 
     elements.searchResults.classList.add('active');
 }
@@ -487,7 +501,7 @@ function navigateToMessage(messageId) {
     }
 }
 
-// ========== UI HELPERS ==========
+// ========== UI HELPERS ========== 
 function updateHeader(conv) {
     elements.aiNickname.textContent = conv.ai_name;
     const startName = document.getElementById('startName');
@@ -555,19 +569,81 @@ function updateMessageReactions(msgId, reactions) {
     renderMessages(state.messages);
 }
 
-function applyTheme(theme) {
-    document.body.className = `${theme}-theme`;
-}
-
-function applySoundSetting(enabled) {
+// Refactored Theme and Sound functions
+function applySoundSetting(enabled, save = true) {
     state.soundEnabled = enabled;
     document.body.dataset.sound = enabled.toString();
+    if (save) {
+        socket.emit('update_setting', { key: 'sound_enabled', value: enabled.toString() });
+    }
 }
 
 function playNotificationSound() {
     if (state.soundEnabled && elements.notificationSound) {
         elements.notificationSound.currentTime = 0;
         elements.notificationSound.play().catch(() => {});
+    }
+}
+
+function applyTheme(themeName) {
+    if (!themeName) return;
+
+    const existingLink = document.getElementById('dynamic-theme-style');
+    if (existingLink) {
+        existingLink.remove();
+    }
+
+    document.body.className = ''; // Clear all classes
+    document.body.classList.add(`${themeName}-theme`);
+
+    if (themeName !== 'default' && themeName !== 'light') {
+        const link = document.createElement('link');
+        link.id = 'dynamic-theme-style';
+        link.rel = 'stylesheet';
+        link.href = `/duongdev/minhthy/static/themes/${themeName}.css`;
+        document.head.appendChild(link);
+    }
+    
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === themeName);
+    });
+
+    state.currentTheme = themeName;
+    console.log(`🎨 Theme applied: ${themeName}`);
+}
+
+function renderThemeButtons(themes) {
+    const container = document.getElementById('themeOptions');
+    if (!container) return;
+
+    container.innerHTML = themes.map(theme => `
+        <button 
+            class="theme-btn" 
+            data-theme="${escapeHtml(theme.name)}" 
+            style="background: ${escapeHtml(theme.preview_color)}; border: 1px solid var(--border-color);"
+            title="${escapeHtml(theme.name)}">
+        </button>
+    `).join('');
+
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const themeName = btn.dataset.theme;
+            applyTheme(themeName);
+            socket.emit('update_setting', { key: 'theme', value: themeName });
+        });
+    });
+}
+
+async function fetchThemes() {
+    try {
+        const response = await fetch('/duongdev/minhthy/themes');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const themes = await response.json();
+        renderThemeButtons(themes);
+    } catch (error) {
+        console.error("Could not fetch themes:", error);
     }
 }
 
@@ -611,7 +687,7 @@ function escapeHtml(text) {
 }
 
 function escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return string.replace(/[.*+?^${}()|[\\]\]/g, '\\$&');
 }
 
 function scrollToBottom(smooth = true) {
@@ -632,7 +708,11 @@ function autoResize(textarea) {
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 }
 
-// ========== EVENT LISTENERS ==========
+// ========== EVENT LISTENERS ========== 
+document.addEventListener('DOMContentLoaded', () => {
+    // Socket connection will trigger init_data, which then triggers theme loading
+});
+
 elements.sendBtn.addEventListener('click', sendMessage);
 
 elements.messageInput.addEventListener('keydown', e => {
@@ -735,19 +815,8 @@ elements.closeSettingsBtn.addEventListener('click', () =>
     elements.appContainer.classList.remove('settings-open')
 );
 
-elements.themeToggle.addEventListener('click', () => {
-    const newTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
-    applyTheme(newTheme);
-    socket.emit('update_setting', { key: 'theme', value: newTheme });
-});
-
 elements.soundToggle.addEventListener('click', () => {
-    const newSound = !state.soundEnabled;
-    applySoundSetting(newSound);
-    socket.emit('update_setting', {
-        key: 'sound_enabled',
-        value: newSound.toString()
-    });
+    applySoundSetting(!state.soundEnabled);
 });
 
 elements.exportBtn.addEventListener('click', () => {
@@ -811,6 +880,6 @@ document.addEventListener('click', e => {
     }
 });
 
-// ========== INIT ==========
+// ========== INIT ========== 
 elements.messageInput.focus();
 console.log('🌸 Minh Thy Chat v2.0 initialized');

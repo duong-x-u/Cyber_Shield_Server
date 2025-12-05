@@ -1,4 +1,3 @@
-
 import sys
 import os
 
@@ -267,7 +266,7 @@ def start_background_tasks_if_needed():
 
 def get_system_prompt(conv_id):
     conv = get_conversation(conv_id)
-    if not conv: return ""
+    if not conv: return "" 
     
     ai_name, user_name, mood = conv['ai_name'], conv['user_name'], conv['mood']
     busy_status = conv.get('busy_status', 'rảnh')
@@ -367,7 +366,7 @@ CHỈ trả về JSON object, KHÔNG gì khác."""
 
 def get_ai_response(conv_id, user_message):
     conv = get_conversation(conv_id)
-    if not conv or conv.get('busy_status') == 'Học chính khóa':
+    if not conv or conv.get('busy_status') in ['Học chính khóa', 'Đang ngủ', 'Đi tắm', 'Đi xem phim với bạn']:
         return {'action': 'no_reply', 'content': '', 'emoji': ''}
     
     recent_messages = get_messages(conv_id, limit=50)
@@ -403,7 +402,7 @@ def get_proactive_ai_response(conv_id):
 def get_proactive_sleep_message(conv_id):
     conv = get_conversation(conv_id)
     json_example = '{"action": "reply", "content": "..."}'
-    prompt = f"BẠN LÀ {conv['ai_name']}. Hiện đã muộn ({datetime.now(GMT7).strftime('%H:%M')}), hãy xin phép {conv['user_name']} đi ngủ một cách tự nhiên. Trả lời bằng JSON: {json_example}."
+    prompt = f"BẠN LÀ {conv['ai_name']}. Hiện đã muộn ({datetime.now(GMT7).strftime('%H:%M')}), hãy xin phép {conv['user_name']} đi ngủ một cách tự nhiên. Trả lời bằng JSON: {json_example}"
     messages = [{"role": "user", "content": prompt}]
     result = model.run(messages)
     if result[1]: raise Exception(result[1])
@@ -417,49 +416,7 @@ def get_fallback_response(user_message):
 
 # ========== HUMAN ENGINE HELPERS ==========
 
-def human_delay(content, mood):
-    """
-    Tạo thời gian delay giống người thật dựa trên mood + độ dài tin nhắn.
-    """
-    base = len(content) * 0.04  # càng dài càng lâu
-    mood_factor = {
-        range(80, 101): 0.6,   # mood cao → rep nhanh
-        range(60, 80): 0.8,
-        range(40, 60): 1.0,
-        range(20, 40): 1.4,    # mood thấp → rep chậm
-        range(0, 20): 1.8,
-    }
-    factor = next((v for k, v in mood_factor.items() if mood in k), 1.0)
-    # random cho đỡ đều đều
-    return max(0.3, base * factor + random.uniform(-0.3, 0.5))
-
-
-def maybe_typo(text):
-    """
-    ~2% khả năng gõ sai + 30% trong số đó sẽ sửa lại.
-    """
-    if random.random() > 0.02:
-        return text, None  # không typo
-
-    typo_positions = [i for i, c in enumerate(text) if c.isalpha()]
-    if not typo_positions:
-        return text, None
-
-    pos = random.choice(typo_positions)
-    typo_char = random.choice("zxcmnqwepoi")  # vài chữ hay bị nhầm
-    typo_text = text[:pos] + typo_char + text[pos+1:]
-
-    # 30% sẽ sửa lại, còn lại để kệ luôn
-    if random.random() < 0.3:
-        return typo_text, text  # trả về (tin nhắn sai, bản đúng để sửa)
-    return typo_text, None
-
-
 def split_into_human_messages(content):
-    """
-    Chỉ split khi AI cố tình xuống dòng.
-    Nếu AI không xuống dòng → giữ nguyên một msg.
-    """
     content = content.strip()
 
     # Nếu AI cố tình xuống dòng → chia theo dòng
@@ -623,24 +580,21 @@ def handle_message(data):
     
     # Only set to online if AI is not sleeping soundly or in class
     if conv.get('sleep_status') != 'ngủ say' and \
-       conv.get('busy_status') not in ['Học chính khóa', 'Đang ngủ']:
+       conv.get('busy_status') not in ['Học chính khóa', 'Đang ngủ', 'Đi tắm', 'Đi xem phim với bạn']:
         socketio.start_background_task(delayed_online_status_task, conv_id=conv_id)
     
     socketio.start_background_task(target=delayed_ai_response_task, conv_id=conv_id, user_message=user_message, ai_name=conv['ai_name'], user_msg_id=msg_id)
 
 def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
-    # show typing trong lúc gọi model
-    socketio.emit('typing_start', room=str(conv_id))
     try:
+        # 1. Get AI response (the "thinking" part, no typing indicator)
         ai_action = get_ai_response(conv_id, user_message)
-        socketio.emit('typing_stop', room=str(conv_id))
 
         if ai_action.get('action') == 'no_reply':
             return
-        
+
         conv = get_conversation(conv_id)
-        mood = int(conv.get('mood', 70)) if conv else 70
-        busy_status = conv.get('busy_status')
+        busy_status = conv.get('busy_status') if conv else None
 
         # 40% chance to not reply if napping
         if busy_status == 'Ngủ trưa' and random.random() < 0.4:
@@ -649,76 +603,70 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
 
         contents = ai_action.get('content', [])
         if isinstance(contents, str):
-            contents = [contents]
+            contents = [contents] if contents.strip() else []
+
+        if not contents: # If content is empty, just handle reaction
+            if ai_action.get('emoji') and user_msg_id:
+                update_message_reactions(user_msg_id, [ai_action['emoji']])
+                socketio.emit('reaction_updated', {'message_id': user_msg_id, 'reactions': [ai_action['emoji']]})
+            return
 
         any_message_sent = False
 
+        # 2. Add a "thinking/reading" delay before the first message part
+        socketio.sleep(random.uniform(1.0, 2.0))
+
         for raw_content in contents:
-            if not isinstance(raw_content, str):
-                continue
-            raw_content = raw_content.strip()
-            if not raw_content:
+            if not isinstance(raw_content, str) or not raw_content.strip():
                 continue
 
-            # 1) chia thành nhiều message nhỏ nếu cần
             human_msgs = split_into_human_messages(raw_content)
 
-            for msg in human_msgs:
-                # 2) gõ sai có chủ đích
-                msg_with_typo, correction = maybe_typo(msg)
+            for i, msg in enumerate(human_msgs):
+                # If this isn't the first message in a multi-part response, add a small pause
+                if i > 0:
+                    socketio.sleep(random.uniform(0.8, 1.5))
 
-                # 3) delay giống người (phụ thuộc mood + độ dài)
-                socketio.sleep(human_delay(msg_with_typo, mood))
+                # 3. New Typing Simulation
+                # A fast typist is ~80 WPM. 80 words * 5 chars/word = 400 chars/min.
+                # 60s / 400 chars = 0.15s/char. Let's use something faster for chat.
+                typing_duration = len(msg) * 0.07 + random.uniform(0.3, 0.8) # Base time + random "pause" 
+                typing_duration = max(0.5, min(typing_duration, 4.0)) # Clamp between 0.5s and 4.0s
 
-                # 4) typing animation ngắn trước khi gửi
                 socketio.emit('typing_start', room=str(conv_id))
-                socketio.sleep(random.uniform(0.15, 0.35))
+                socketio.sleep(typing_duration)
                 socketio.emit('typing_stop', room=str(conv_id))
 
-                # 5) gửi tin nhắn chính
-                ai_msg_id = save_message(conv_id, 'assistant', ai_name, msg_with_typo)
+                # 4. Send message
+                ai_msg_id = save_message(conv_id, 'assistant', ai_name, msg)
                 socketio.emit('new_message', {
                     'id': ai_msg_id,
                     'role': 'assistant',
                     'sender_name': ai_name,
-                    'content': msg_with_typo,
+                    'content': msg,
                     'timestamp': datetime.now(GMT7).strftime('%H:%M'),
                     'is_seen': 0
                 }, room=str(conv_id))
-
                 any_message_sent = True
-                socketio.sleep(0.1)
 
-                # 6) nếu có correction thì gửi thêm "*chỉnh lỗi"
-                if correction:
-                    socketio.sleep(random.uniform(0.2, 0.6))
-                    cor_id = save_message(conv_id, 'assistant', ai_name, f"*{correction}")
-                    socketio.emit('new_message', {
-                        'id': cor_id,
-                        'role': 'assistant',
-                        'sender_name': ai_name,
-                        'content': f"*{correction}",
-                        'timestamp': datetime.now(GMT7).strftime('%H:%M'),
-                        'is_seen': 0
-                    }, room=str(conv_id))
-
-        # 7) Thả reaction nếu model yêu cầu
+        # 5. Handle reaction if requested
         if ai_action.get('emoji') and user_msg_id:
+            socketio.sleep(0.2) # Small delay before reacting
             update_message_reactions(user_msg_id, [ai_action['emoji']])
             socketio.emit('reaction_updated', {
                 'message_id': user_msg_id,
                 'reactions': [ai_action['emoji']]
             })
 
-        # 8) Cập nhật list conversation nếu có tin mới
+        # 6. Update conversation list if new messages were sent
         if any_message_sent:
             socketio.emit('conversations_updated', {
                 'conversations': get_all_conversations()
             })
 
     except Exception as e:
-        print(f"❌ AI Error: {e}")
-        socketio.emit('typing_stop', room=str(conv_id))
+        print(f"❌ AI Error in delayed_ai_response_task: {e}")
+        socketio.emit('typing_stop', room=str(conv_id)) # Ensure typing stops on error
         fallback_msg = get_fallback_response(user_message)
         fallback_msg_id = save_message(conv_id, 'assistant', ai_name, fallback_msg)
         socketio.emit('new_message', {
@@ -729,33 +677,39 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
             'timestamp': datetime.now(GMT7).strftime('%H:%M'),
             'is_seen': 0
         }, room=str(conv_id))
+        
+@app.route('/themes')
+def get_themes():
+    themes_dir = os.path.join(os.path.dirname(__file__), 'static', 'themes')
+    themes = []
+    
+    # Add default themes first
+    themes.append({'name': 'default', 'preview_color': '#0f0f0f'})
+    themes.append({'name': 'light', 'preview_color': '#f0f2f5'})
 
-@socketio.on('add_reaction')
-def handle_add_reaction(data):
-    msg = get_message(data.get('message_id'))
-    if not msg: return
-    reactions = json.loads(msg.get('reactions', '[]'))
-    emoji = data.get('emoji')
-    if emoji in reactions: reactions.remove(emoji)
-    else: reactions.append(emoji)
-    update_message_reactions(msg['id'], reactions)
-    emit('reaction_updated', {'message_id': msg['id'], 'reactions': reactions})
+    if os.path.exists(themes_dir):
+        for filename in os.listdir(themes_dir):
+            if filename.endswith('.css'):
+                theme_name = filename[:-4]
+                preview_color = '#cccccc' # Fallback color
+                try:
+                    with open(os.path.join(themes_dir, filename), 'r', encoding='utf-8') as f:
+                        # Read first few lines to find the preview color
+                        for line in f:
+                            if 'theme-preview-color' in line:
+                                match = re.search(r'theme-preview-color:\s*(#[0-9a-fA-F]{3,6});', line)
+                                if match:
+                                    preview_color = match.group(1)
+                                break # Stop after finding
+                except Exception:
+                    pass # Ignore errors, use fallback
+                
+                themes.append({
+                    'name': theme_name,
+                    'preview_color': preview_color
+                })
+    return jsonify(themes)
 
-@socketio.on('mark_seen')
-def handle_mark_seen(data):
-    if data.get('conversation_id'):
-        mark_messages_seen(data['conversation_id'])
-        emit('messages_seen', {'conversation_id': data['conversation_id']})
-        # Add this line to refresh sidebar unread counts
-        socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
-
-@socketio.on('search_messages')
-def handle_search(data):
-    query = data.get('query', '').strip()
-    if not query: 
-        return emit('search_results', {'results': [], 'query': query})
-    results = search_messages(data.get('conversation_id'), query)
-    emit('search_results', {'results': results, 'query': query})
 
 # ========== RUN ==========
 if __name__ == '__main__':
