@@ -1,2 +1,4 @@
 flask
 bytez
+Flask-SocketIO
+eventlet

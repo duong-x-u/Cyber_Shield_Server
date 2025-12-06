@@ -429,8 +429,19 @@ body {
 }
 
 .mobile-menu {
-    display: none;
+    display: flex; /* Visible on all screens now */
 }
+
+/* Sidebar Collapsed State (Desktop) */
+.sidebar.collapsed {
+    width: 0;
+    border: none;
+    overflow: hidden; 
+}
+
+/* Adjust main container when sidebar is collapsed if needed, 
+   but since flexbox handles it, we mainly just need to hide the sidebar */
+
 
 .header-left {
     display: flex;
@@ -605,6 +616,36 @@ body[data-sound="false"] .icon-sound-on { display: none; }
     padding: 20px;
     text-align: center;
     color: var(--text-muted);
+}
+
+.search-filters {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 0 20px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    animation: slideDown 0.2s ease;
+}
+
+.search-filters label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.search-filters input[type="date"] {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+}
+.search-filters input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
 }
 
 /* ========== CHAT AREA ========== */
@@ -918,6 +959,145 @@ body[data-sound="false"] .icon-sound-on { display: none; }
     object-fit: cover;
 }
 
+/* Styling for retracted messages */
+.message-bubble.retracted {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-style: italic;
+    box-shadow: none;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* Actions menu for messages */
+.message-actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.message.sent:hover .message-actions {
+    opacity: 1;
+}
+
+.message.sent .message-wrapper {
+    position: relative; /* Needed for menu positioning */
+}
+
+.message.sent .message-actions {
+    margin-right: 8px;
+}
+
+.actions-menu {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 5px); /* Position above the bubble */
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    padding: 6px;
+    width: 120px;
+    z-index: 10;
+}
+
+.actions-menu.visible {
+    display: block;
+}
+
+.menu-item {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    text-align: left;
+    font-size: 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: block;
+}
+
+.menu-item:hover {
+    background: var(--accent);
+    color: white;
+}
+
+.menu-item.danger {
+    color: var(--danger);
+}
+
+.menu-item.danger:hover {
+    background: var(--danger);
+    color: white;
+}
+
+/* Edit Message Form */
+.message-edit-form {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.message-edit-form textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 15px;
+    resize: vertical;
+    min-height: 44px;
+    outline: none;
+}
+
+.edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.edit-actions button {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.edit-btn-save {
+    background: var(--accent);
+    color: white;
+}
+.edit-btn-save:hover {
+    background: var(--accent-hover);
+}
+
+.edit-btn-cancel {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+.edit-btn-cancel:hover {
+    background: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Edited Label */
+.edited-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: 6px;
+}
+
 
 /* ========== SCROLL TO BOTTOM ========== */
 .scroll-bottom-btn {
@@ -1058,6 +1238,59 @@ body[data-sound="false"] .icon-sound-on { display: none; }
 .input-wrapper {
     flex: 1;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-tertiary);
+    border-radius: 22px;
+    border: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.input-wrapper:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.3);
+}
+
+/* Image Preview */
+.image-preview {
+    display: none;
+    padding: 10px 14px 0 14px;
+    position: relative;
+    width: fit-content;
+}
+
+.image-preview.active {
+    display: block;
+}
+
+.image-preview img {
+    max-height: 100px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    display: block;
+}
+
+#removeImgBtn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+    transition: background 0.2s;
+}
+
+#removeImgBtn:hover {
+    background: rgba(244, 67, 54, 0.9);
 }
 
 #messageInput {
@@ -1066,23 +1299,36 @@ body[data-sound="false"] .icon-sound-on { display: none; }
     max-height: 120px;
     padding: 10px 18px;
     border: none;
-    border-radius: 22px;
-    background: var(--bg-tertiary);
+    border-radius: 22px; /* Radius handled by wrapper now */
+    background: transparent; /* Transparent to use wrapper bg */
     color: var(--text-primary);
     font-size: 15px;
     font-family: inherit;
     outline: none;
     resize: none;
     line-height: 1.4;
-    transition: box-shadow 0.2s;
-}
-
-#messageInput::placeholder {
-    color: var(--text-muted);
 }
 
 #messageInput:focus {
-    box-shadow: 0 0 0 2px var(--accent);
+    box-shadow: none; /* Remove default shadow as wrapper has it */
+}
+
+/* Chat Area Images */
+.message-image {
+    max-width: 100%;
+    max-height: 300px; /* Limit height */
+    width: auto; /* Maintain aspect ratio */
+    border-radius: 12px;
+    margin-bottom: 6px;
+    display: block;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Mobile adjustment */
+@media (max-width: 768px) {
+    .message-image {
+        max-height: 250px;
+    }
 }
 
 .send-btn {

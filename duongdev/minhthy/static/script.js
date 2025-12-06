@@ -53,6 +53,23 @@ const elements = {
     themeOptions: document.getElementById('themeOptions'),
 };
 
+// Dynamically create and inject search filters
+const searchFiltersContainer = document.createElement('div');
+searchFiltersContainer.className = 'search-filters';
+searchFiltersContainer.style.display = 'none'; // Initially hidden
+searchFiltersContainer.innerHTML = `
+    <label for="startDate">Từ:</label>
+    <input type="date" id="startDate">
+    <label for="endDate">Đến:</label>
+    <input type="date" id="endDate">
+`;
+elements.searchBar.parentNode.insertBefore(searchFiltersContainer, elements.searchBar.nextSibling);
+
+// Add newly created elements to the elements object
+elements.searchFilters = searchFiltersContainer;
+elements.startDateInput = document.getElementById('startDate');
+elements.endDateInput = document.getElementById('endDate');
+
 // ========== STATE & CONFIG ========== 
 const AVATAR_URL = document.body.dataset.avatarUrl;
 
@@ -66,6 +83,7 @@ let state = {
     isConnected: false,
     currentTheme: 'default',
 };
+
 
 // ========== SOCKET EVENTS ========== 
 socket.on('connect', () => {
@@ -179,6 +197,18 @@ socket.on('new_message', data => {
     scrollToBottom();
     playNotificationSound();
     elements.messageCount.textContent = (parseInt(elements.messageCount.textContent) || 0) + 1;
+
+    // Show Notification if app is in background
+    if (document.hidden && Notification.permission === "granted" && data.role === 'assistant') {
+        const notification = new Notification(data.sender_name, {
+            body: data.content,
+            icon: AVATAR_URL
+        });
+        notification.onclick = () => {
+            window.focus();
+            notification.close();
+        };
+    }
 });
 
 socket.on('reaction_updated', data => {
@@ -197,6 +227,18 @@ socket.on('messages_seen', () => {
         }
     });
     if (changed) renderMessages(state.messages);
+});
+
+socket.on('message_updated', data => {
+    const updatedMsg = data.message;
+    if (!updatedMsg) return;
+
+    const msgIndex = state.messages.findIndex(m => m.id === updatedMsg.id);
+    if (msgIndex > -1) {
+        // Create a new object to ensure reactivity if using a framework
+        state.messages[msgIndex] = { ...state.messages[msgIndex], ...updatedMsg };
+        renderMessages(state.messages);
+    }
 });
 
 socket.on('search_results', data => {
@@ -325,9 +367,25 @@ function renderMessages(messages) {
 
 function createMessageHTML(msg) {
     const type = msg.role === 'user' ? 'sent' : 'received';
-    const reactions = parseReactions(msg.reactions);
     const time = formatTime(msg.timestamp);
     const group = msg.groupType;
+
+    if (msg.is_retracted) {
+        return `
+            <div class="message ${type} ${group}" data-id="${msg.id}">
+                <div class="message-wrapper">
+                    <div class="msg-avatar-placeholder"></div>
+                    <div class="message-content">
+                        <div class="message-bubble retracted">
+                            <p class="message-text">${escapeHtml(msg.content)}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    const reactions = parseReactions(msg.reactions);
 
     let replyHTML = '';
     if (msg.reply_content) {
@@ -366,19 +424,43 @@ function createMessageHTML(msg) {
             ? `
                 <div class="message-meta">
                     <span class="message-time">${time}</span>
+                    ${msg.is_edited ? '<span class="edited-label">(đã chỉnh sửa)</span>' : ''}
                     ${seenHTML}
                 </div>
             `
             : '';
+    
+    const actionsHTML = 
+        type === 'sent' 
+        ? `
+            <div class="message-actions">
+                <button class="btn-icon action-btn-more">
+                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2_0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z" /></svg>
+                </button>
+                <div class="actions-menu">
+                    <button class="menu-item edit-btn">Chỉnh sửa</button>
+                    <button class="menu-item retract-btn danger">Thu hồi</button>
+                </div>
+            </div>
+        ` 
+        : '';
 
     return `
         <div class="message ${type} ${group}" data-id="${msg.id}">
             <div class="message-wrapper">
                 ${avatarHTML}
+                ${actionsHTML}
                 <div class="message-content">
                     ${replyHTML}
                     <div class="message-bubble">
                         <p class="message-text">${escapeHtml(msg.content)}</p>
+                    </div>
+                    <div class="message-edit-form">
+                        <textarea>${escapeHtml(msg.content)}</textarea>
+                        <div class="edit-actions">
+                            <button class="edit-btn-cancel">Hủy</button>
+                            <button class="edit-btn-save">Lưu</button>
+                        </div>
                     </div>
                     ${reactionsHTML}
                     ${metaHTML}
@@ -386,6 +468,125 @@ function createMessageHTML(msg) {
             </div>
         </div>
     `;
+}
+
+// ========== MESSAGE HANDLERS ==========
+function attachMessageHandlers() {
+    document.querySelectorAll('.message-bubble').forEach(bubble => {
+        // Xử lý thả cảm xúc (Double click)
+        bubble.addEventListener('dblclick', e => {
+            showReactionPicker(bubble.closest('.message'), e);
+        });
+
+        let pressTimer;
+
+        // Xử lý trả lời tin nhắn trên Mobile (Nhấn giữ)
+        bubble.addEventListener(
+            'touchstart',
+            () => {
+                pressTimer = setTimeout(() => startReply(bubble.closest('.message')), 500);
+            },
+            { passive: true }
+        );
+
+        bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
+
+        // Xử lý trả lời tin nhắn trên Desktop (Chuột phải)
+        bubble.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            startReply(bubble.closest('.message'));
+        });
+    });
+
+    // Handle actions menu toggle
+    document.querySelectorAll('.action-btn-more').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const menu = button.nextElementSibling;
+            // Close all other menus before opening a new one
+            document.querySelectorAll('.actions-menu.visible').forEach(m => {
+                if (m !== menu) m.classList.remove('visible');
+            });
+            menu.classList.toggle('visible');
+        });
+    });
+
+    // Handle retract button click
+    document.querySelectorAll('.retract-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const messageEl = button.closest('.message');
+            const msgId = parseInt(messageEl.dataset.id);
+
+            if (confirm('Bạn có chắc muốn thu hồi tin nhắn này không?')) {
+                socket.emit('retract_message', { message_id: msgId });
+            }
+        });
+    });
+
+    // Global listener to close menus
+    document.addEventListener('click', (e) => {
+        const openMenus = document.querySelectorAll('.actions-menu.visible');
+        if (openMenus.length > 0 && !e.target.closest('.message-actions')) {
+            openMenus.forEach(menu => menu.classList.remove('visible'));
+        }
+    }, true); // Use capture phase to catch click first
+
+    // Handle Edit button click
+    document.querySelectorAll('.edit-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const messageEl = button.closest('.message');
+            messageEl.classList.add('editing');
+
+            const bubble = messageEl.querySelector('.message-bubble');
+            const editForm = messageEl.querySelector('.message-edit-form');
+            
+            bubble.style.display = 'none';
+            editForm.style.display = 'flex';
+            
+            // Hide the menu
+            button.closest('.actions-menu').classList.remove('visible');
+        });
+    });
+
+    // Handle Edit Cancel
+    document.querySelectorAll('.edit-btn-cancel').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const messageEl = button.closest('.message');
+            messageEl.classList.remove('editing');
+
+            const bubble = messageEl.querySelector('.message-bubble');
+            const editForm = messageEl.querySelector('.message-edit-form');
+
+            editForm.style.display = 'none';
+            bubble.style.display = 'block';
+        });
+    });
+
+    // Handle Edit Save
+    document.querySelectorAll('.edit-btn-save').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const messageEl = button.closest('.message');
+            const msgId = parseInt(messageEl.dataset.id);
+            const newContent = messageEl.querySelector('textarea').value.trim();
+
+            if (newContent) {
+                socket.emit('edit_message', {
+                    message_id: msgId,
+                    new_content: newContent
+                });
+            }
+
+            // The UI will update automatically via the 'message_updated' event
+            // so we just need to exit the edit mode visually
+            messageEl.classList.remove('editing');
+            const bubble = messageEl.querySelector('.message-bubble');
+            const editForm = messageEl.querySelector('.message-edit-form');
+            editForm.style.display = 'none';
+            bubble.style.display = 'block';
+        });
+    });
 }
 
 // ========== MESSAGE SENDING ========== 
@@ -426,91 +627,12 @@ function sendMessage() {
     elements.messageInput.focus();
 }
 
-// ========== MESSAGE HANDLERS ========== 
-function attachMessageHandlers() {
-    document.querySelectorAll('.message-bubble').forEach(bubble => {
-        bubble.addEventListener('dblclick', e => {
-            showReactionPicker(bubble.closest('.message'), e);
-        });
-
-        let pressTimer;
-
-        bubble.addEventListener(
-            'touchstart',
-            () => {
-                pressTimer = setTimeout(() => startReply(bubble.closest('.message')), 500);
-            },
-            { passive: true }
-        );
-
-        bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
-
-        bubble.addEventListener('contextmenu', e => {
-            e.preventDefault();
-            startReply(bubble.closest('.message'));
-        });
-    });
-}
-
-// ========== SEARCH ========== 
-function renderSearchResults(results, query) {
-    if (results.length === 0) {
-        elements.searchResults.innerHTML = `<div class="no-results">Không tìm thấy kết quả cho "${escapeHtml(query)}"</div>`;
-        elements.searchResults.classList.add('active');
-        return;
-    }
-
-    const queryLower = query.toLowerCase();
-    elements.searchResults.innerHTML = results
-        .map(msg => {
-            const content = msg.content;
-            const contentLower = content.toLowerCase();
-            let highlighted = '';
-
-            if (!queryLower || queryLower.length === 0) {
-                highlighted = escapeHtml(content);
-            } else {
-                let lastIndex = 0;
-                const parts = [];
-                let index = contentLower.indexOf(queryLower, lastIndex);
-                while (index !== -1) {
-                    parts.push(escapeHtml(content.substring(lastIndex, index)));
-                    parts.push(`<mark>${escapeHtml(content.substring(index, index + query.length))}</mark>`);
-                    lastIndex = index + query.length;
-                    index = contentLower.indexOf(queryLower, lastIndex);
-                }
-                parts.push(escapeHtml(content.substring(lastIndex)));
-                highlighted = parts.join('');
-            }
-
-            return `
-                <div class="search-result-item" data-id="${msg.id}">
-                    <div class="result-sender">${escapeHtml(msg.sender_name)}</div>
-                    <div class="result-content">${highlighted}</div>
-                </div>
-            `;
-        })
-        .join('');
-
-    document.querySelectorAll('.search-result-item').forEach(item => {
-        item.addEventListener('click', () => {
-            navigateToMessage(parseInt(item.dataset.id));
-            elements.searchResults.classList.remove('active');
-            elements.searchBar.classList.remove('active');
-            elements.searchInput.value = '';
-        });
-    });
-
-    elements.searchResults.classList.add('active');
-}
-
-function navigateToMessage(messageId) {
-    const el = document.querySelector(`.message[data-id="${messageId}"]`);
-    if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('highlighted');
-        setTimeout(() => el.classList.remove('highlighted'), 3000);
-    }
+// Image handling functions
+function clearImageSelection() {
+    state.selectedImage = null;
+    elements.imageInput.value = ''; // Reset input
+    elements.previewImg.src = '';
+    elements.imagePreview.classList.remove('active');
 }
 
 // ========== UI HELPERS ========== 
@@ -699,7 +821,7 @@ function escapeHtml(text) {
 }
 
 function escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\\]\]/g, '\\$&');
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function scrollToBottom(smooth = true) {
@@ -708,7 +830,7 @@ function scrollToBottom(smooth = true) {
             top: elements.chatArea.scrollHeight,
             behavior: smooth ? 'smooth' : 'auto'
         });
-    }, 50);
+    }, 200); // Increased delay for better rendering
 }
 
 function closeSidebar() {
@@ -723,6 +845,9 @@ function autoResize(textarea) {
 // ========== EVENT LISTENERS ========== 
 document.addEventListener('DOMContentLoaded', () => {
     // Socket connection will trigger init_data, which then triggers theme loading
+    if ("Notification" in window && Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
 });
 
 elements.sendBtn.addEventListener('click', sendMessage);
@@ -776,11 +901,13 @@ elements.chatArea.addEventListener('scroll', () => {
 elements.scrollBottomBtn.addEventListener('click', () => scrollToBottom());
 
 elements.searchBtn.addEventListener('click', () => {
-    elements.searchBar.classList.toggle('active');
-    if (elements.searchBar.classList.contains('active')) {
+    const isActive = elements.searchBar.classList.toggle('active');
+    if (isActive) {
         elements.searchInput.focus();
+        elements.searchFilters.style.display = 'flex';
     } else {
         elements.searchResults.classList.remove('active');
+        elements.searchFilters.style.display = 'none';
     }
 });
 
@@ -796,6 +923,8 @@ elements.searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
 
     const query = elements.searchInput.value.trim();
+    const startDate = elements.startDateInput.value;
+    const endDate = elements.endDateInput.value;
 
     if (query.length < 2) {
         elements.searchResults.classList.remove('active');
@@ -805,13 +934,19 @@ elements.searchInput.addEventListener('input', () => {
     searchTimeout = setTimeout(() => {
         socket.emit('search_messages', {
             conversation_id: state.currentConversationId,
-            query
+            query: query,
+            start_date: startDate,
+            end_date: endDate
         });
     }, 300);
 });
 
 elements.menuToggle.addEventListener('click', () => {
-    elements.sidebar.classList.toggle('open');
+    if (window.innerWidth > 900) {
+        elements.sidebar.classList.toggle('collapsed');
+    } else {
+        elements.sidebar.classList.toggle('open');
+    }
 });
 
 elements.newChatBtn.addEventListener('click', () => {

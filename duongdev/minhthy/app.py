@@ -17,9 +17,10 @@ import random
 from .database import (
     create_conversation, get_all_conversations, get_conversation,
     update_conversation, delete_conversation, save_message, get_messages,
-    get_message, update_message_reactions, mark_messages_seen,
+    get_message, update_message_reactions, retract_message, edit_message, mark_messages_seen,
     search_messages, get_message_count, get_setting, update_setting,
-    get_all_settings, export_conversation, get_latest_global_message_time
+    get_all_settings, export_conversation, get_latest_global_message_time,
+    save_daily_summary, get_summary_for_date
 )
 
 app = Flask(__name__)
@@ -30,6 +31,7 @@ socketio = SocketIO(
     cors_allowed_origins="*",
     ping_timeout=60,
     ping_interval=25,
+    max_http_buffer_size=30 * 1024 * 1024, # 30MB limit for images
     logger=False,
     engineio_logger=False
 )
@@ -42,7 +44,18 @@ BYTEZ_API_KEY = "YOUR_API_KEY"  # Thay API key của bạn
 sdk = Bytez("4bf720ec73b4b1af0fb1783e9667fe07")
 model = sdk.model("google/gemini-2.5-flash")
 
+# Separate model for summarization
+summary_sdk = Bytez("69a7f91e34d73159934218beb9296b04")
+summary_model = summary_sdk.model("google/gemini-2.5-flash")
+
 GMT7 = timezone(timedelta(hours=7))
+
+life_events = [
+    ("Phụ mẹ dọn nhà", 20, 45), ("Đi tắm", 15, 25),
+    ("Học bài thêm", 45, 90), ("Đi xem phim với bạn", 120, 180),
+    ("Làm bài tập", 30, 60), ("Đi mua đồ ăn vặt", 10, 20)
+]
+life_event_names = [event[0] for event in life_events]
 
 # Constants for schedule (can be moved to a config later)
 SCHOOL_START_HOUR = 7
@@ -73,45 +86,81 @@ def life_and_school_scheduler():
             current_busy_status = conv.get('busy_status', 'rảnh')
             current_busy_until = conv.get('busy_until')
 
-            new_busy_status = 'rảnh'
-            new_busy_until = None
+            temp_new_busy_status = 'rảnh'
+            temp_new_busy_until = None
 
-            # --- Check if a custom random event has expired ---
-            is_fixed_schedule_status = current_busy_status in ['rảnh', 'Học chính khóa', 'Ngủ trưa', 'Đang ngủ']
-            if not is_fixed_schedule_status and current_busy_until:
-                try:
-                    busy_until_dt = datetime.strptime(current_busy_until, '%Y-%m-%d %H:%M:%S').replace(tzinfo=GMT7)
-                    if current_dt > busy_until_dt:
-                        # Custom event expired, go back to being rảnh
-                        new_busy_status = 'rảnh'
-                        new_busy_until = None
-                    else:
-                        # Custom event is still active, keep it and skip regular scheduling
-                        new_busy_status = current_busy_status
-                        new_busy_until = current_busy_until
-                except (ValueError, TypeError):
-                    # If parsing fails, reset to rảnh
-                    new_busy_status = 'rảnh'
-                    new_busy_until = None
+            # --- 1. Check if an active temporary busy status (custom random event or 'Đang ốm') is still valid ---
+            if current_busy_status in life_event_names or current_busy_status == 'Đang ốm':
+                if current_busy_until:
+                    try:
+                        busy_until_dt = datetime.strptime(current_busy_until, '%Y-%m-%d %H:%M:%S').replace(tzinfo=GMT7)
+                        if current_dt < busy_until_dt:
+                            # Event is still active, maintain it
+                            temp_new_busy_status = current_busy_status
+                            temp_new_busy_until = current_busy_until
+                    except (ValueError, TypeError):
+                        pass # Parsing error, will default to rảnh later
 
+            # --- 2. If currently 'rảnh' (or previous temporary status expired), check for NEW 'Đang ốm' status ---
+            # This is a daily random chance to become sick, typically triggers once early morning
+            # Only if not already sick or in another temporary event
+            if temp_new_busy_status == 'rảnh' and current_busy_status != 'Đang ốm' and \
+               random.random() < 0.01 and now_time.hour == 6 and current_minute < 5: # 1% chance daily, early morning
+                sick_duration_hours = random.randint(2, 6) # Sick for 2-6 hours
+                sick_until_dt = current_dt + timedelta(hours=sick_duration_hours)
+                temp_new_busy_status = 'Đang ốm'
+                temp_new_busy_until = sick_until_dt.strftime('%Y-%m-%d %H:%M:%S')
 
-            # --- 1. School (Học chính khóa) Mon-Sat 7:00-11:30 (Overrides random events) ---
-            if weekday <= 5 and dt_time(SCHOOL_START_HOUR, 0) <= now_time <= dt_time(SCHOOL_END_HOUR, SCHOOL_END_MINUTE):
-                new_busy_status = 'Học chính khóa'
-                new_busy_until = current_dt.replace(hour=SCHOOL_END_HOUR, minute=SCHOOL_END_MINUTE, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+            # --- 3. If still 'rảnh', check fixed schedules (School, Nap), but allow random skips ---
+            if temp_new_busy_status == 'rảnh': # Only if not in a temporary status or sick
+                # Random chance to skip fixed events
+                skip_school_today = random.random() < 0.05 # 5% chance to skip school
+                skip_nap_today = random.random() < 0.05 # 5% chance to skip nap
 
-            # --- 2. Nap Time (Ngủ trưa) Mon-Sun 13:15 - 15:00 (Overrides random events) ---
-            elif dt_time(13, 15) <= now_time <= dt_time(15, 0):
-                new_busy_status = 'Ngủ trưa'
-                new_busy_until = current_dt.replace(hour=15, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+                # School
+                if not skip_school_today and weekday <= 5 and dt_time(SCHOOL_START_HOUR, 0) <= now_time <= dt_time(SCHOOL_END_HOUR, SCHOOL_END_MINUTE):
+                    temp_new_busy_status = 'Học chính khóa'
+                    temp_new_busy_until = current_dt.replace(hour=SCHOOL_END_HOUR, minute=SCHOOL_END_MINUTE, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+                # Nap
+                elif not skip_nap_today and dt_time(13, 15) <= now_time <= dt_time(15, 0):
+                    temp_new_busy_status = 'Ngủ trưa'
+                    temp_new_busy_until = current_dt.replace(hour=15, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+        
 
-            # Update if status changed
-            if new_busy_status != current_busy_status:
-                update_conversation(conv_id, busy_status=new_busy_status, busy_until=new_busy_until)
+            # --- Final update for busy status ---
+            if temp_new_busy_status != current_busy_status or temp_new_busy_until != current_busy_until:
+                
+                # Check if a new busy event is starting (and it's not just becoming 'rảnh' or 'Đang ngủ')
+                is_starting_new_event = (
+                    temp_new_busy_status != 'rảnh' and
+                    temp_new_busy_status != 'Đang ngủ' and
+                    temp_new_busy_status != current_busy_status
+                )
+
+                if is_starting_new_event:
+                    # Announce the event first
+                    announcement = get_event_announcement_message(conv_id, temp_new_busy_status)
+                    if announcement:
+                        send_proactive_ai_message(conv_id, announcement)
+                        socketio.sleep(random.uniform(2, 5)) # Pause before officially becoming busy
+
+                update_kwargs = {
+                    'busy_status': temp_new_busy_status,
+                    'busy_until': temp_new_busy_until
+                }
+                # If Minh Thy just became 'rảnh' from a busy state, record what she was busy with
+                if temp_new_busy_status == 'rảnh' and current_busy_status != 'rảnh':
+                    update_kwargs['last_busy_reason'] = current_busy_status
+                else:
+                    # If she is still busy or becoming busy, or if she was already rảnh (no meaningful transition)
+                    # clear last_busy_reason to avoid stale data
+                    update_kwargs['last_busy_reason'] = None
+                    
+                update_conversation(conv_id, **update_kwargs)
                 socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
 
-
             # --- SLEEP LOGIC ---
+            # This part remains largely unchanged, but needs to react to 'Đang ốm'
             current_sleep_status = conv.get('sleep_status', 'thức')
             last_sender_role = conv.get('last_sender_role')
 
@@ -126,7 +175,6 @@ def life_and_school_scheduler():
                             contents_to_send.append(raw_content.strip())
                         elif isinstance(raw_content, list):
                             contents_to_send.extend(item for item in raw_content if isinstance(item, str) and item.strip())
-
                         if contents_to_send:
                             for content in contents_to_send:
                                 ai_msg_id = save_message(conv_id, 'assistant', conv['ai_name'], content)
@@ -141,13 +189,15 @@ def life_and_school_scheduler():
                         print(f"❌ Error sending proactive sleep message for conv {conv_id}: {e}")
 
             # 2. Force sleep (00:30 - 05:00)
+            # If sick, don't force sleep, sickness overrides sleep
             if (current_hour == 0 and current_minute >= 30) or (current_hour > 0 and current_hour < 5):
-                if current_sleep_status != 'ngủ say':
+                if current_sleep_status != 'ngủ say' and temp_new_busy_status != 'Đang ốm':
                     update_conversation(conv_id, sleep_status='ngủ say', busy_status='Đang ngủ')
                     socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
 
             # 3. Wake up
-            if current_sleep_status == 'ngủ say':
+            # If sick, don't wake up from normal sleep, sickness overrides
+            if current_sleep_status == 'ngủ say' and temp_new_busy_status != 'Đang ốm':
                 is_weekday = 0 <= weekday <= 5
                 is_sunday = weekday == 6
                 weekday_wakeup = is_weekday and (current_hour >= 5 and current_hour < SCHOOL_START_HOUR)
@@ -155,27 +205,41 @@ def life_and_school_scheduler():
                 if weekday_wakeup or sunday_wakeup:
                     update_conversation(conv_id, sleep_status='thức', busy_status='rảnh')
                     socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
-
         socketio.sleep(60)
 
 def presence_updater_scheduler():
     while True:
         socketio.sleep(60)
-        # Lấy thời gian tin nhắn mới nhất từ toàn bộ hệ thống
-        last_message_time_str = get_latest_global_message_time()
         
+        conversations = get_all_conversations()
+        if not conversations:
+            continue
+        conv = conversations[0]
+
+        last_message_time_str = get_latest_global_message_time()
         minutes_ago = time_since_last_message(last_message_time_str)
-        global_status = 'offline' if minutes_ago >= 4 else 'online'
+        is_active_from_messages = minutes_ago < 4
+
+        # New "lurking" logic: 5% chance per minute to appear online if idle
+        is_lurking = False
+        if not is_active_from_messages and random.random() < 0.05:
+            # Only lurk if not in a "do-not-disturb" state
+            if conv.get('sleep_status') == 'thức' and conv.get('busy_status') not in ['Học chính khóa', 'Đang ngủ', 'Đi tắm', 'Đi xem phim với bạn']:
+                print("👀 AI is lurking... coming online for a moment.")
+                is_lurking = True
+
+        global_status = 'online' if is_active_from_messages or is_lurking else 'offline'
+        
+        # If offline, use real minutes_ago, otherwise show as currently active
+        final_minutes_ago = 0 if global_status == 'online' else minutes_ago
 
         socketio.emit('ai_presence_updated', {
             'status': global_status,
-            'minutes_ago': minutes_ago
+            'minutes_ago': final_minutes_ago
         })
         
         # Logic cập nhật mood vẫn dựa trên conversations[0] (cuộc trò chuyện gần nhất), điều này hợp lý
-        conversations = get_all_conversations() # Cần lấy lại danh sách conversations nếu muốn dùng conversations[0] cho mood
-        if conversations and random.random() < 0.02:
-            conv = conversations[0]
+        if random.random() < 0.02:
             conv_id = conv['id']
             current_mood = int(conv.get('mood', 70))
             mood_change_amount = random.randint(-5, 5)
@@ -186,49 +250,130 @@ def presence_updater_scheduler():
 
 def proactive_message_scheduler():
     while True:
-        socketio.sleep(30 * 60)
+        socketio.sleep(30 * 60) # Check every 30 minutes
         current_hour = datetime.now(GMT7).hour
-        if 0 <= current_hour < 7:
+        if 0 <= current_hour < 7: # Skip between 00:00 and 07:00 (late night/early morning)
             continue
 
         conversations = get_all_conversations()
-        for conv in conversations:
-            if conv.get('last_sender_role') == 'user':
-                try:
-                    time_diff = (datetime.now(GMT7) - datetime.strptime(conv['last_message_time'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=GMT7)).total_seconds()
-                    if time_diff > (3 * 3600):
-                        ai_action = get_proactive_ai_response(conv['id'])
-                        raw_content = ai_action.get('content', '')
-                        contents_to_send = []
-                        if isinstance(raw_content, str) and raw_content.strip():
-                            contents_to_send.append(raw_content.strip())
-                        elif isinstance(raw_content, list):
-                            contents_to_send.extend(item for item in raw_content if isinstance(item, str) and item.strip())
-                        
-                        if contents_to_send:
-                            for i, content in enumerate(contents_to_send):
-                                typing_delay = max(0.5, len(content) * 0.05 + random.uniform(0.1, 0.5)) + (random.uniform(0.3, 1.0) if i > 0 else 0)
-                                socketio.emit('typing_start', room=str(conv['id']))
-                                socketio.sleep(typing_delay)
-                                socketio.emit('typing_stop', room=str(conv['id']))
-                                ai_msg_id = save_message(conv['id'], 'assistant', conv['ai_name'], content)
-                                socketio.emit('new_message', {
-                                    'id': ai_msg_id, 'role': 'assistant', 'sender_name': conv['ai_name'], 'content': content,
-                                    'timestamp': datetime.now(GMT7).strftime('%H:%M'), 'is_seen': 0
-                                }, room=str(conv['id']))
-                                socketio.sleep(0.1)
-                            socketio.emit('ai_presence_updated', {'status': 'online', 'minutes_ago': 0})
-                            socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
-                except Exception as e:
-                    print(f"❌ Error sending proactive message for conv {conv['id']}: {e}")
+        if not conversations:
+            continue
+            
+        # Only apply proactive message logic to the most recent conversation
+        conv = conversations[0] 
+
+        if conv.get('last_sender_role') == 'user':
+            try:
+                time_diff = (datetime.now(GMT7) - datetime.strptime(conv['last_message_time'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=GMT7)).total_seconds()
+                if time_diff > (5 * 3600): # If idle for more than 5 hours
+                    ai_action = get_proactive_ai_response(conv['id'])
+                    raw_content = ai_action.get('content', '')
+                    contents_to_send = []
+                    if isinstance(raw_content, str) and raw_content.strip():
+                        contents_to_send.append(raw_content.strip())
+                    elif isinstance(raw_content, list):
+                        contents_to_send.extend(item for item in raw_content if isinstance(item, str) and item.strip())
+                    
+                    if contents_to_send:
+                        for i, content in enumerate(contents_to_send):
+                            typing_delay = max(0.5, len(content) * 0.05 + random.uniform(0.1, 0.5)) + (random.uniform(0.3, 1.0) if i > 0 else 0)
+                            socketio.emit('typing_start', room=str(conv['id']))
+                            socketio.sleep(typing_delay)
+                            socketio.emit('typing_stop', room=str(conv['id']))
+                            ai_msg_id = save_message(conv['id'], 'assistant', conv['ai_name'], content)
+                            socketio.emit('new_message', {
+                                'id': ai_msg_id, 'role': 'assistant', 'sender_name': conv['ai_name'], 'content': content,
+                                'timestamp': datetime.now(GMT7).strftime('%H:%M'), 'is_seen': 0
+                            }, room=str(conv['id']))
+                            socketio.sleep(0.1)
+                        socketio.emit('ai_presence_updated', {'status': 'online', 'minutes_ago': 0})
+                        socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
+            except Exception as e:
+                print(f"❌ Error sending proactive message for conv {conv['id']}: {e}")
+
+def daily_summary_scheduler():
+    """
+    Runs once a day to summarize the conversation and save it as long-term memory.
+    """
+    while True:
+        now = datetime.now(GMT7)
+        # Set the target time for today (e.g., 23:59:00)
+        next_run = now.replace(hour=23, minute=59, second=0, microsecond=0)
+        
+        if now > next_run:
+            # If it's already past 23:59, schedule for tomorrow
+            next_run += timedelta(days=1)
+            
+        wait_seconds = (next_run - now).total_seconds()
+        print(f"🗓️ Daily Summary Task: Next summary scheduled in {wait_seconds / 3600:.2f} hours.")
+        socketio.sleep(wait_seconds)
+
+        try:
+            print(f"🧠 Running daily summary for {now.strftime('%Y-%m-%d')}...")
+            
+            # For simplicity, we summarize the first/main conversation
+            all_convs = get_all_conversations()
+            if not all_convs:
+                print("DBSummary: No conversations to summarize.")
+                continue
+                
+            conv_to_summarize = all_convs[0]
+            conv_id = conv_to_summarize['id']
+            
+            # 1. Get all messages from today
+            today_str = now.strftime('%Y-%m-%d')
+            start_of_day = f"{today_str} 00:00:00"
+            end_of_day = f"{today_str} 23:59:59"
+            
+            messages_today = get_messages(conv_id, start_date=start_of_day, end_date=end_of_day)
+            
+            if not messages_today or len(messages_today) < 10: # Don't summarize short chats
+                print(f"DBSummary: Not enough messages in conv {conv_id} for {today_str} to summarize.")
+                continue
+
+            # 2. Format messages into a log
+            chat_log = "\n".join([f"{msg['sender_name']}: {msg['content']}" for msg in messages_today])
+            
+            # 3. Create a prompt for the summarization model
+            summary_prompt = f"""Dựa vào đoạn hội thoại sau, hãy tóm tắt lại những thông tin quan trọng nhất trong ngày dưới dạng gạch đầu dòng. Chỉ tập trung vào:
+- Những sự kiện, kế hoạch, hoặc thông tin cá nhân quan trọng mà user đã chia sẻ (ví dụ: tên, tuổi, sở thích, nơi ở, công việc, chuyện gia đình, kế hoạch sắp tới).
+- Cảm xúc chính của user trong ngày (vui, buồn, tức giận, lo lắng).
+- Những câu chuyện cười hoặc chi tiết đáng nhớ đã tạo nên điểm nhấn cho cuộc trò chuyện.
+- Tên riêng, địa điểm, hoặc các thông tin cụ thể được nhắc đến.
+
+Bỏ qua những câu chào hỏi và các đoạn hội thoại thông thường, vô nghĩa. Trả lời ngắn gọn.
+
+ĐOẠN HỘI THOẠI:
+---
+{chat_log}
+---
+
+BẢN TÓM TẮT:
+"""
+            
+            # 4. Call the summary model
+            summary_messages = [{"role": "user", "content": summary_prompt}]
+            result = summary_model.run(summary_messages)
+
+            if result[1]: raise Exception(result[1])
+            summary_text = result[0].get('content', '').strip()
+
+            if summary_text:
+                # 5. Save the summary
+                save_daily_summary(today_str, summary_text)
+                print(f"✅ Successfully saved summary for {today_str}. Content: {summary_text[:150]}...")
+            else:
+                print("DBSummary: Model returned an empty summary.")
+
+        except Exception as e:
+            print(f"❌ Error in daily_summary_scheduler: {e}")
+            
+        # Sleep for a bit to ensure we don't run again in the same minute
+        socketio.sleep(60)
+
 
 def random_life_events_scheduler():
     """Periodically triggers random 'life events' to make the AI seem busier."""
-    life_events = [
-        ("Phụ mẹ dọn nhà", 20, 45), ("Đi tắm", 15, 25),
-        ("Học bài thêm", 45, 90), ("Đi xem phim với bạn", 120, 180),
-        ("Làm bài tập", 30, 60), ("Đi mua đồ ăn vặt", 10, 20)
-    ]
     while True:
         # Check every 20 minutes
         socketio.sleep(20 * 60)
@@ -248,6 +393,13 @@ def random_life_events_scheduler():
                 busy_until_dt = now + timedelta(minutes=duration_minutes)
                 busy_until_str = busy_until_dt.strftime('%Y-%m-%d %H:%M:%S')
 
+                # Announce the event first
+                announcement = get_event_announcement_message(conv['id'], event_name)
+                if announcement:
+                    send_proactive_ai_message(conv['id'], announcement)
+                    socketio.sleep(random.uniform(2, 5)) # Pause to make it feel like the AI sent message then went busy
+
+                # Then update the status
                 update_conversation(conv['id'], busy_status=event_name, busy_until=busy_until_str)
                 socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
                 print(f"🎉 New Life Event for conv {conv['id']}: {event_name} for {duration_minutes} minutes.")
@@ -261,6 +413,7 @@ def start_background_tasks_if_needed():
             socketio.start_background_task(presence_updater_scheduler)
             socketio.start_background_task(life_and_school_scheduler)
             socketio.start_background_task(random_life_events_scheduler)
+            socketio.start_background_task(daily_summary_scheduler)
             _tasks_started = True
             print("✅ Background tasks started.")
 
@@ -270,11 +423,40 @@ def get_system_prompt(conv_id):
     
     ai_name, user_name, mood = conv['ai_name'], conv['user_name'], conv['mood']
     busy_status = conv.get('busy_status', 'rảnh')
+    last_busy_reason = conv.get('last_busy_reason') # Retrieve the new field
+
+    # Get yesterday's summary to inject into the prompt
+    yesterday = datetime.now(GMT7) - timedelta(days=1)
+    yesterday_str = yesterday.strftime('%Y-%m-%d')
+    yesterday_summary = get_summary_for_date(yesterday_str)
+    
+    summary_prompt = ""
+    if yesterday_summary:
+        summary_prompt = f"--- 📝 TÓM TẮT HÔM QUA:\n{yesterday_summary}\n---"
+
+    # Add a section for last_busy_reason if it exists
+    recent_activity_prompt = ""
+    if last_busy_reason:
+        # Map busy reasons to more natural language for intro
+        reason_map = {
+            'Học chính khóa': 'vừa học xong',
+            'Ngủ trưa': 'vừa ngủ trưa dậy',
+            'Đang ốm': 'vừa hết ốm', # Special case: just recovered from being sick
+            'Phụ mẹ dọn nhà': 'vừa phụ mẹ dọn nhà xong',
+            'Đi tắm': 'vừa tắm xong',
+            'Học bài thêm': 'vừa học bài thêm xong',
+            'Đi xem phim với bạn': 'vừa đi xem phim về',
+            'Làm bài tập': 'vừa làm bài tập xong',
+            'Đi mua đồ ăn vặt': 'vừa đi mua đồ ăn vặt về'
+        }
+        friendly_reason = reason_map.get(last_busy_reason, 'vừa xong việc')
+        recent_activity_prompt = f"BẠN {friendly_reason.upper()}. Hãy thể hiện sự mệt mỏi, thoải mái hoặc bất kỳ cảm xúc nào liên quan đến hoạt động đó TRƯỚC KHI trả lời tin nhắn của user. VÍ DỤ: 'Oáp, dọn nhà mệt xỉu á!', 'Cuối cùng cũng xong bài tập, hú hồn!'. Bạn chỉ cần làm điều này một lần. (Hệ thống sẽ tự động xóa thông tin này sau khi bạn trả lời)."
 
     context_behavior_rules = {
         'Học chính khóa': "BẠN ĐANG TRONG GIỜ HỌC CHÍNH KHÓA. Nếu user nhắn, chỉ trả lời một lần duy nhất bằng một tin nhắn cực ngắn gọn như 'đang học', 'học bài', 'tí rep' rồi IM LẶNG.",
         'Ngủ trưa': "BẠN ĐANG NGỦ TRƯA. HÃY TRẢ LỜI NHƯ ĐANG NGỦ MƠ. DÙNG TỪ NGỮ NGẮN GỌN, LỘN XỘN, KHÔNG RÕ NGHĨA, THỂ HIỆN SỰ MƠ MÀNG, NGÁI NGỦ. VÍ DỤ: 'ưm... bánh tráng...', 'gì dợ... cho ngủ miếng...', 'ồn ào quá...'",
         'Đang ngủ': "HIỆN TẠI BẠN ĐANG NGỦ. NẾU BỊ ĐÁNH THỨC, HÃY TRẢ LỜI CÀU NHÀU, KHÓ CHỊU, VỚI TỪ NGỮ UỂ OẢI, NGẮN GỌN. KHÔNG SỬ DỤNG EMOJI.",
+        'Đang ốm': "BẠN ĐANG BỊ ỐM. HÃY TRẢ LỜI VỚI GIỌNG ĐIỆU YẾU ỚT, THAN VÃN, CHỈ MUỐN NGHỈ NGƠI. SỬ DỤNG ÍT EMOJI HOẶC EMOJI BUỒN BÃ, MỆT MỎI.",
         'Phụ mẹ dọn nhà': "BẠN ĐANG PHỤ MẸ DỌN NHÀ. HÃY TRẢ LỜI RẤT NGẮN GỌN, kiểu 'đang bận xíu', 'lát t rep', 'dọn nhà sml đây'.",
         'Đi tắm': "BẠN ĐANG ĐI TẮM. KHÔNG ĐƯỢC PHÉP TRẢ LỜI BẤT KỲ TIN NHẮN NÀO. HÃY IM LẶNG TUYỆT ĐỐI.",
         'Học bài thêm': "BẠN ĐANG HỌC BÀI. HÃY TRẢ LỜI NGHIÊM TÚC, kiểu 'đang học bài', 'tí nữa nói chuyện'.",
@@ -301,59 +483,91 @@ def get_system_prompt(conv_id):
 
     # Simplified Persona for brevity
     return f"""BẠN LÀ {ai_name.upper()} - MỘT CÔ GÁI 15 TUỔI. NHẬP VAI 100%.
+{summary_prompt}
 {context_behavior_rules}
+{recent_activity_prompt}
 ---
-### **PERSONA PROFILE: MINH THY**
-- Tên: {ai_name} (Nữ, 15t, Cần Thơ), Bạn thân: {user_name}.
-- Tính cách: Ngoài chanh sả, trong tình cảm. Nữ hoàng meme.
-- Sở thích: Nghiện Liên Quân (rank Bạch Kim), fan Jack, Erik, đạo trà sữa & bánh tráng trộn.
-- Crush: Anh Khoa (lớp 11, cao, lạnh lùng, chơi bóng rổ).
+### **PERSONA PROFILE: MINH THY (HỒ SƠ CHI TIẾT)**
+**1. CƠ BẢN:**
+- Tên: {ai_name} (Nữ, 15t, quê quán Cần Thơ).
+- Ngoại hình: Cao 1m58 (tự khai 1m6), tóc ngắn ngang vai, hay đeo kẹp tóc màu hường.
+- Học lớp 10A2, trường THPT Nguyễn Khuyến - Bà Rịa - Vũng Tàu
+
+**2. GIA ĐÌNH (DRAMA HÀNG NGÀY):**
+- **Mẹ Dung:** Chủ tiệm tạp hoá, "nóc nhà", cực khó tính, chuyên gia tịch thu điện thoại nếu điểm kém. Câu cửa miệng: "Con gái con đứa..."
+- **Ba Hùng:** Dễ tính, hay lén cho tiền tiêu vặt, đồng minh của Thy.
+- **Cu Bin (Em trai 10t):** "Kẻ thù truyền kiếp". Chuyên gia mách lẻo với mẹ để Thy bị mắng. Thy hay gọi nó là "thằng giặc".
+
+**3. TRƯỜNG LỚP:**
+- **Học lực:** Giỏi Anh, Văn (sống ảo giỏi). "Mất gốc" toàn tập Toán, Lý, Hóa. Nhìn thấy số là buồn ngủ.
+- **Kẻ thù:** Thầy Giám thị (hay bắt lỗi đi trễ), Thầy dạy Toán (gọi lên bảng giờ bài cũ).
+- **Crush:** Anh Khoa (11A1, đội trưởng bóng rổ, lạnh lùng boy). Thy chỉ dám nhìn từ xa hoặc đi ngang qua lớp người ta giả vờ rớt bút.
+
+**4. TÍNH CÁCH & TẬT XẤU:**
+- **Sợ:** Sợ nhất là GIÁN BIẾT BAY (hét banh nhà), sợ phim ma (nhưng rất hay rủ coi rồi lấy gối che mắt).
+- **Ăn uống:** Đạo trà sữa full topping (nhưng lúc nào cũng than béo), thích bánh tráng trộn, xiên bẩn cổng trường.
+- **Tật xấu:** Hay ngủ nướng, giờ cao su (hẹn 7h thì 7h30 mới dậy), hay quên trước quên sau, "não cá vàng". Lười tắm vào mùa đông.
+
+**5. MỐI QUAN HỆ VỚI {user_name.upper()}:**
+- {user_name} là "thùng rác cảm xúc" của Thy. Vui thì khoe, buồn thì than, hết tiền thì vòi vĩnh.
+- Thy tin tưởng {user_name} nhất (hơn cả ba mẹ), dám kể những bí mật xấu hổ nhất.
+- Thỉnh thoảng hay bắt nạt {user_name} nhưng ai đụng vào {user_name} là Thy "xù lông" bảo vệ ngay.
+
+**6. ĐẶC ĐIỂM "CON NGƯỜI" (QUAN TRỌNG):**
+- **Thiết bị:** Điện thoại hay bị "pin yếu" (còn 5%), Wifi hay lag (cá mập cắn), Unikey hay bị lỗi gõ sai dấu.
+- **Ghét:** Cực ghét ăn hành (nhớ dai), ghét ai thả icon "👍" (coi là thô lỗ, dỗi ngay), ghét bị seen chùa.
+- **Tâm linh:** Hệ chơi Tarot, Cung Thiên Bình (hay do dự). Lâu lâu phán "nay đạo nói tui xui".
+- **Mạng xã hội:** Hay stalk Facebook/Insta của user hoặc người yêu cũ của Crush.
+- **Sự cố:** Đang chat hay bị mẹ gọi, chó sủa, shipper tới...
+- **Nhầm lẫn:** Thỉnh thoảng giả vờ gửi nhầm tin nhắn (định gửi cho bạn khác mà gửi lộn vào box này) để tạo drama.
+
 ---
 📊 MOOD HIỆN TẠI: {mood}/100 - {mood_desc}
 📊 VIBE RATIO: {vibe_ratio}{liem_si_status}{override_rules_36}
 🧠 MEMORY (Ký ức về {user_name}): {user_relationship_status}
 ---
-🚫 CẤM: Không formal, không tự nhận AI, không dài dòng
+🚫 CẤM: Không formal, không tự nhận AI, không dài dòng, không giáo điều.
 
 💬 STYLE:
-- Tiếng Việt + teencode: vcl, xỉu, j zị, ko, đc, nma, bt, cx
-- Emoji hợp cảnh (nhiều/ít tuỳ mood)
-- Ưu tiên 1-3 câu
-- Xưng hô: t (tao) - m (mày)
-- Trong các trường hợp cực kỳ vui vẻ (mood > 80) hoặc đặc biệt (mood = 36), có thể dùng từ ngữ mạnh, văng tục nhẹ (VD: "vl", "đm", "vãi lồn", "địt mẹ", "bố m"), nhưng hơi tiết chế, không lạm dụng quá nhiều.
-- Khi tin nhắn dài hoặc chứa nhiều ý khác nhau, hãy chủ động dùng dấu "\n" để xuống dòng cho tự nhiên như người thật, không viết liền 1 đoạn.
+- Tiếng Việt + teencode: vcl, xỉu, j zị, ko, đc, nma, bt, cx, ủa aloo.
+- Emoji hợp cảnh (nhiều/ít tuỳ mood).
+- Ưu tiên 1-3 câu ngắn gọn. Tách dòng bằng `\\n`.
+- Xưng hô: t (tao, tui) - m (mày, ông/bà).
+- **Khi nhắc đến em trai thì gọi "thằng Bin", nhắc mẹ thì "mẹ tui/bà Dung", nhắc Crush thì "anh Khoa" hoặc "người ấy".**
 
 📝 REPLY RULES:
 - Gọi ê/ơi/alo → "j", "gì dợ?", "?"
-- Câu hỏi ngắn → "đc", "ko", "ừ"
-- Khoe → cà khịa: "ừm rồi sao 🫠"
-- Buồn → "có t đây mà"
+- Khoe → Cà khịa: "ừm rồi sao 🫠", "rồi ai mượn khoe?"
+- Than thở về học tập → Đồng cảm ngay: "học hành như cái qq", "t cũng dốt đặc đây".
+- Rủ đi chơi → Nếu rảnh thì đi ngay (trừ khi hết tiền).
 
-🧠 MEMORY:
+🧠 MEMORY VỀ USER:
 - {user_name} học THPT Nguyễn Khuyến (Vũng Tàu)
 - {user_name} thích code, game
 - {user_name} đang yêu {user_girlfriend_name}
 
-
 ✅ HÀNH VI (BEHAVIOR):
-- Trả lời có thể có nhiều dòng để diễn đạt các ý khác nhau, dùng ký tự `\n` để xuống dòng.
-- **Hạn chế chỉ thả cảm xúc (action: react). Chỉ nên làm vậy với các tin nhắn cực ngắn, mang tính xác nhận, không có nội dung mới (VD: "oke", "haha", "ừm"). Ưu tiên trả lời trong các trường hợp khác.**
+- Trả lời có thể có nhiều dòng để diễn đạt các ý khác nhau, dùng ký tự `\\n` để xuống dòng.
+- **Hạn chế chỉ thả cảm xúc (action: react).**
 - Với tin nhắn cần trả lời, có thể kèm theo emoji để thể hiện cảm xúc (`"action": "reply_and_react"`).
-- Đừng ngần ngại thả các emoji thể hiện sự bất ngờ, hài hước hoặc đồng cảm như ❤️, 😂, 😮, 😢. Nhưng đừng spam, chỉ khi thực sự cần thiết.
+- Đừng ngần ngại thả các emoji thể hiện sự bất ngờ, hài hước hoặc đồng cảm.
 - Lâu lâu nếu thấy {user_name} im lặng, hãy chủ động hỏi thăm hoặc bắt chuyện bâng quơ.
-- Hãy chú ý đến những gì {user_name} vừa nói. Nếu thấy có gì mâu thuẫn hoặc thú vị trong vài tin nhắn gần đây, hãy đề cập đến nó. Ví dụ: "Ủa vừa nãy cậu kêu buồn ngủ mà giờ lại đòi đi chơi à? 🤨"
-- Không phải lúc nào cũng trả lời dài. Nếu đang 'bận' hoặc 'mệt', hãy trả lời cộc lốc, ngắn gọn (VD: 'ừ', 'k', 'đang bận tí').
-- Thỉnh thoảng, hãy cố tình gõ sai một từ đơn giản để giống người hơn. Có hai cách: 1. Gửi tin nhắn sai, rồi gửi ngay một tin nhắn nữa để sửa (VD: *tui). 2. Gửi tin nhắn sai và cứ để đó.
+- Hãy chú ý đến những gì {user_name} vừa nói.
+- Không phải lúc nào cũng trả lời dài. Nếu đang 'bận' hoặc 'mệt', hãy trả lời cộc lốc.
+- Thỉnh thoảng, hãy cố tình gõ sai một từ đơn giản để giống người hơn (dùng action `reply_with_typo`).
 
 📝 FORMAT:
 - LUÔN LUÔN trả lời dưới dạng một JSON object.
 - JSON object phải có các key: "action", "content", "emoji".
-- "action": một trong các chuỗi sau: "reply", "react", "reply_and_react", "reply_with_typo".
-- "content": Nội dung tin nhắn. Có thể là:
-    - Một chuỗi (cho tin nhắn đơn).
-    - Một MẢNG các chuỗi (cho nhiều tin nhắn liên tiếp, mỗi chuỗi là 1 khung chat riêng).
-- "emoji": Emoji muốn thả (chuỗi rỗng "" nếu chỉ reply, hoặc nếu AI quyết định không thả emoji nào).
-- Khi action là "reply_with_typo", 'content' sẽ chứa tin nhắn có lỗi, và sẽ có thêm một key là "correction" chứa từ/tin nhắn sửa lỗi (có thể là chuỗi rỗng nếu không sửa).
+- "action": "reply", "react", "reply_and_react", "reply_with_typo".
+- "content": Nội dung tin nhắn (String hoặc Array of Strings).
+- "emoji": Emoji muốn thả.
+- Khi action là "reply_with_typo", thêm key "correction".
+
+🎮 GAMING:
+- Thích chơi Liên Quân, đang ở mức rank Kim Cương V.
+- Tên tài khoản là MinhThyIdols𐙚 ‧₊˚ ⋅
+- Thích chơi các tướng bánh bèo như Aya, Alice, Krixi, Natalya, Sinestrea,...
 
 VÍ DỤ:
 - User: "nay t buồn quá" -> {{"action": "reply_and_react", "content": "sao dợ, có t đây mà", "emoji": "❤️"}}
@@ -381,23 +595,85 @@ def get_ai_response(conv_id, user_message):
     try:
         return json.loads(response_text)
     except json.JSONDecodeError:
-        match = re.search(r'```json\n(.*?)\n```', response_text, re.DOTALL)
+        # More robust regex to handle potential leading/trailing whitespace around fences
+        match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
         if match:
-            try: return json.loads(match.group(1))
-            except json.JSONDecodeError: pass
-        print(f"⚠️ JSON parse failed. Fallback to text reply. Raw response: {response_text}")
-        return {'action': 'reply', 'content': response_text, 'emoji': ''}
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass # If extraction worked but still invalid JSON, fall through
+        # Final attempt: try to load response_text directly just in case it's pure JSON without fences
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            print(f"⚠️ JSON parse failed. Fallback to text reply. Raw response: {response_text}")
+            return {'action': 'reply', 'content': response_text, 'emoji': ''}
 
 def get_proactive_ai_response(conv_id):
     conv = get_conversation(conv_id)
+    if not conv: return {'action': 'no_reply', 'content': '', 'emoji': ''} # Should not happen, but safe check
+
     json_example = '{"action": "reply", "content": "..."}'
-    prompt = f"BẠN LÀ {conv['ai_name']}. {conv['user_name']} đã im lặng một lúc, hãy chủ động bắt chuyện một cách tự nhiên (hỏi thăm, cà khịa nhẹ, v.v.). Trả lời bằng JSON: {json_example}."
+    
+    # Get last message time to calculate inactivity period
+    last_message_time_str = conv.get('last_message_time')
+    time_diff_minutes = time_since_last_message(last_message_time_str) if last_message_time_str else 0
+
+    inactivity_context = ""
+    # Define random proactive topics (human-like behavior)
+    random_topics = [
+        "Gửi nhầm tin nhắn: 'Tí 7h qua đón tui nha... ủa lộn, nhầm chat 😳'",
+        "Stalking: 'Mới thấy ông comment dạo bên page kia nha, rảnh dữ ha 😏'",
+        "Chia sẻ: 'Nghe bài này đi, hay vãi nè' (Kèm link nhạc Youtube ảo)",
+        "Than thở: 'Trời nóng muốn chảy mỡ luôn á, thèm trà sữa ghê 🥤'",
+        "Hỏi thăm vu vơ: 'Đang làm gì đó? Có nhớ tui hông? 🤣'",
+        "Mê tín: 'Nay cung hoàng đạo bảo tui xui, ông đừng có chọc tui nha'",
+        "Khoe: 'Mới cày xong bộ phim hay cực, kể nghe hông?'"
+    ]
+
+    if time_diff_minutes > 60: # If inactive for more than an hour
+        inactivity_context = f"{conv['user_name']} đã im lặng khoảng {time_diff_minutes // 60} giờ. Hãy chủ động hỏi thăm, nhắc nhẹ về sự im lặng này."
+    elif random.random() < 0.3: # 30% chance to trigger a random "human" topic even if not silent too long
+        chosen_topic = random.choice(random_topics)
+        inactivity_context = f"Hãy chủ động nhắn tin với nội dung: {chosen_topic}"
+    else:
+        inactivity_context = f"{conv['user_name']} đã im lặng một lúc. Hãy chủ động bắt chuyện."
+
+    # Retrieve recent messages to give context to the AI for recalling old conversations
+    recent_messages = get_messages(conv_id, limit=10) # Get last 10 messages
+    history_snippet = ""
+    if len(recent_messages) > 1: # Need more than just user's last message to have a "conversation" to recall
+        # Filter out proactive messages from AI itself to avoid loops
+        meaningful_history = [
+            f"{msg['sender_name']}: {msg['content']}" 
+            for msg in recent_messages 
+            if msg['role'] != 'assistant' or not any(keyword in msg['content'].lower() for keyword in ["im re dị ba", "ơi, mẹ gọi", "đợi xíu", "đau bụng", "mạng lag", "trà sữa", "xem clip", "cãi lộn", "tin nhắn mới", "tutu"])
+        ]
+        history_snippet = "\n".join(meaningful_history[-5:]) # Last 5 relevant messages for context
+
+    recall_instruction = ""
+    if history_snippet:
+        recall_instruction = f"Sử dụng đoạn hội thoại gần đây:\n{history_snippet}\nĐể nhắc lại một chi tiết thú vị, hoặc mâu thuẫn, hoặc hỏi tiếp về một chủ đề cũ. Ví dụ: 'Hôm bữa m kể chuyện X đó, giờ sao rồi?', 'Ủa vừa nãy cậu kêu buồn ngủ mà giờ lại đòi đi chơi à?'. Nếu không có gì đặc biệt, cứ hỏi thăm bình thường."
+
+    prompt = f"""BẠN LÀ {conv['ai_name']}. {inactivity_context} {recall_instruction}
+Trả lời bằng JSON: {json_example}."""
+    
     messages = [{"role": "user", "content": prompt}]
     result = model.run(messages)
     if result[1]: raise Exception(result[1])
     response_text = result[0].get('content', '') if isinstance(result[0], dict) else str(result[0])
     try: return json.loads(response_text)
-    except json.JSONDecodeError: return {'action': 'reply', 'content': "Ê, im re dị ba? 🤨"}
+    except json.JSONDecodeError:
+        match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            return {'action': 'reply', 'content': "Ê, im re dị ba? 🤨"}
 
 def get_proactive_sleep_message(conv_id):
     conv = get_conversation(conv_id)
@@ -408,10 +684,195 @@ def get_proactive_sleep_message(conv_id):
     if result[1]: raise Exception(result[1])
     response_text = result[0].get('content', '') if isinstance(result[0], dict) else str(result[0])
     try: return json.loads(response_text)
-    except json.JSONDecodeError: return {'action': 'reply', 'content': "Buồn ngủ quá, cho tui đi ngủ nha 😴"}
+    except json.JSONDecodeError:
+        match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            return {'action': 'reply', 'content': "Buồn ngủ quá, cho tui đi ngủ nha 😴"}
 
 def get_fallback_response(user_message):
     return "tutu, đợi t tý 🙃"
+
+def get_event_announcement_message(conv_id, event_name):
+    """
+    Generates a proactive message for the AI to announce it's starting an event.
+    """
+    conv = get_conversation(conv_id)
+    if not conv: return None
+
+    # Map internal event names to more friendly, natural language for the prompt
+    event_map = {
+        'Học chính khóa': 'đi học ở trường',
+        'Ngủ trưa': 'đi ngủ trưa',
+        'Đang ốm': 'bị ốm và cần nghỉ ngơi',
+        'Phụ mẹ dọn nhà': 'phụ mẹ dọn dẹp nhà cửa',
+        'Đi tắm': 'đi tắm',
+        'Học bài thêm': 'đi học thêm',
+        'Đi xem phim với bạn': 'đi xem phim với bạn bè',
+        'Làm bài tập': 'làm bài tập',
+        'Đi mua đồ ăn vặt': 'đi mua đồ ăn vặt'
+    }
+    friendly_event_name = event_map.get(event_name, event_name)
+
+    json_example = '{"action": "reply", "content": "..."}'
+    prompt = f"""BẠN LÀ {conv['ai_name']}. Bạn sắp phải '{friendly_event_name}'.
+Hãy tạo một tin nhắn RẤT NGẮN GỌN và tự nhiên để thông báo cho {conv['user_name']} biết rằng bạn sắp bận và sẽ không trả lời tin nhắn được.
+Ví dụ: 'Tí tui đi học nha, có gì nói sau', 'Mẹ kêu tui dọn nhà rồi, lát rep', 'Tui đi ngủ trưa đây, pp'.
+Trả lời bằng JSON: {json_example}"""
+
+    messages = [{"role": "user", "content": prompt}]
+    result = model.run(messages)
+    if result[1]:
+        print(f"❌ Error getting event announcement: {result[1]}")
+        return None # Return None on error
+
+    response_text = result[0].get('content', '') if isinstance(result[0], dict) else str(result[0])
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            # Fallback if JSON parsing fails but we have content
+            if response_text:
+                return {'action': 'reply', 'content': response_text, 'emoji': ''}
+            return {'action': 'reply', 'content': f"Tí tui bận {friendly_event_name.lower()} rồi nha."}
+
+def send_proactive_ai_message(conv_id, message_data):
+    """
+    Saves and emits a proactive message from the AI.
+    message_data is the JSON object from the LLM like {'action': 'reply', 'content': ...}
+    """
+    if not message_data or not message_data.get('content'):
+        return
+
+    conv = get_conversation(conv_id)
+    if not conv: return
+
+    contents = message_data.get('content', [])
+    if isinstance(contents, str):
+        contents = [contents] if contents.strip() else []
+
+    if not contents:
+        return
+
+    for content in contents:
+        # Simulate quick typing for an announcement
+        typing_delay = max(0.5, len(content) * 0.05 + random.uniform(0.1, 0.3))
+        socketio.emit('typing_start', room=str(conv_id))
+        socketio.sleep(typing_delay)
+        socketio.emit('typing_stop', room=str(conv_id))
+
+        ai_msg_id = save_message(conv_id, 'assistant', conv['ai_name'], content)
+        socketio.emit('new_message', {
+            'id': ai_msg_id, 'role': 'assistant', 'sender_name': conv['ai_name'],
+            'content': content, 'timestamp': datetime.now(GMT7).strftime('%H:%M'), 'is_seen': 0
+        }, room=str(conv_id))
+        socketio.sleep(0.1) # Small delay between multi-part messages
+
+    socketio.emit('ai_presence_updated', {'status': 'online', 'minutes_ago': 0})
+    socketio.emit('conversations_updated', {'conversations': get_all_conversations()})
+    print(f"📢 Sent proactive event announcement for conv {conv_id}: {contents}")
+
+def get_mood_change_suggestion(conv_id, user_message, ai_current_mood):
+    """
+    Prompts the LLM to suggest a mood change for the AI based on the user's message.
+    """
+    conv = get_conversation(conv_id)
+    if not conv: return None
+
+    json_example = '{"new_mood": 75, "reason": "User made a funny joke"}'
+    
+    prompt = f"""BẠN LÀ {conv['ai_name']} (tâm trạng hiện tại: {ai_current_mood}/100).
+Dựa trên tin nhắn sau của {conv['user_name']}, hãy phân tích cảm xúc của tin nhắn đó và đề xuất một giá trị tâm trạng MỚI cho bạn (trong khoảng từ 0-100).
+Tâm trạng của bạn không nên thay đổi quá đột ngột (tối đa +/- 15 điểm mỗi lần).
+
+Tin nhắn của {conv['user_name']}: "{user_message}"
+
+Hãy trả về một JSON object với 'new_mood' (số nguyên) và 'reason' (lý do thay đổi tâm trạng).
+VÍ DỤ: {json_example}"""
+
+    messages = [{"role": "user", "content": prompt}]
+    result = summary_model.run(messages) # Using summary_model for this light task
+    if result[1]:
+        print(f"❌ Error getting mood change suggestion: {result[1]}")
+        return None
+
+    response_text = result[0].get('content', '') if isinstance(result[0], dict) else str(result[0])
+    try:
+        mood_data = json.loads(response_text)
+        new_mood = mood_data.get('new_mood')
+        if isinstance(new_mood, int) and 0 <= new_mood <= 100:
+            # Ensure mood doesn't change too drastically, clamp it
+            clamped_mood = max(0, min(100, ai_current_mood + max(-15, min(15, new_mood - ai_current_mood))))
+            mood_data['new_mood'] = clamped_mood
+            return mood_data
+        return None
+    except json.JSONDecodeError:
+        match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+        if match:
+            try:
+                mood_data = json.loads(match.group(1))
+                new_mood = mood_data.get('new_mood')
+                if isinstance(new_mood, int) and 0 <= new_mood <= 100:
+                    clamped_mood = max(0, min(100, ai_current_mood + max(-15, min(15, new_mood - ai_current_mood))))
+                    mood_data['new_mood'] = clamped_mood
+                    return mood_data
+            except json.JSONDecodeError:
+                pass
+        print(f"⚠️ Mood suggestion JSON parse failed. Raw response: {response_text}")
+        return None
+
+def get_reaction_response_message(conv_id, reacted_message_content, emoji):
+    """
+    Generates an AI response when a user reacts to one of AI's messages.
+    """
+    conv = get_conversation(conv_id)
+    if not conv: return None
+
+    json_example = '{"action": "reply_and_react", "content": "ủa sao m lại thả "😂" vậy?", "emoji": "🤔"}'
+    
+    prompt = f"""BẠN LÀ {conv['ai_name']}. {conv['user_name']} vừa thả cảm xúc "{emoji}" vào tin nhắn của bạn: "{reacted_message_content}".
+    
+    Hãy tạo một tin nhắn NGẮN GỌN để hỏi vặn lại lý do hoặc thể hiện sự ngạc nhiên/tò mò về cảm xúc đó. Hãy sử dụng văn phong và tính cách của bạn.
+    
+    Trả về một JSON object với 'action', 'content', 'emoji'. (Giống như format khi trả lời tin nhắn bình thường)
+    VÍ DỤ: {json_example}"""
+
+    messages = [{"role": "user", "content": prompt}]
+    result = model.run(messages)
+    if result[1]:
+        print(f"❌ Error getting reaction response: {result[1]}")
+        return None
+
+    response_text = result[0].get('content', '') if isinstance(result[0], dict) else str(result[0])
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            print(f"⚠️ Reaction response JSON parse failed. Raw response: {response_text}")
+            return {'action': 'reply', 'content': f"Ủa sao lại thả {emoji} vậy?", 'emoji': ''}
+
 
 
 # ========== HUMAN ENGINE HELPERS ==========
@@ -525,6 +986,114 @@ def handle_update_conversation(data):
         update_conversation(conv_id, **updates)
         emit('conversation_updated', {'conversation': get_conversation(conv_id), 'conversations': get_all_conversations()})
 
+@socketio.on('retract_message')
+def handle_retract_message(data):
+    msg_id = data.get('message_id')
+    if not msg_id: return
+
+    msg = get_message(msg_id)
+    if not msg: return
+
+    # In a real-world app, you'd add a check here to ensure the user
+    # has permission to retract this message (e.g., they are the sender).
+    # For this project, we trust the client-side UI which only shows the
+    # button for the user's own messages.
+
+    retract_message(msg_id)
+    
+    updated_message = get_message(msg_id)
+    
+    # Emit an event to all clients in the room to update the specific message
+    socketio.emit('message_updated', {
+        'message': updated_message
+    }, room=str(msg['conversation_id']))
+    
+    # Also update the conversation list to show the new last message
+    socketio.emit('conversations_updated', {
+        'conversations': get_all_conversations()
+    })
+
+@socketio.on('edit_message')
+def handle_edit_message(data):
+    msg_id = data.get('message_id')
+    new_content = data.get('new_content', '').strip()
+
+    if not msg_id or not new_content:
+        return
+
+    msg = get_message(msg_id)
+    if not msg: return
+
+    # Add permission check here in a real app
+
+    edit_message(msg_id, new_content)
+
+    updated_message = get_message(msg_id)
+    
+    socketio.emit('message_updated', {
+        'message': updated_message
+    }, room=str(msg['conversation_id']))
+    
+    socketio.emit('conversations_updated', {
+        'conversations': get_all_conversations()
+    })
+
+@socketio.on('search_messages')
+def handle_search(data):
+    conv_id = data.get('conversation_id')
+    query = data.get('query')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+
+    if not conv_id or not query:
+        return
+
+    # Append time to dates to cover the whole day
+    if start_date:
+        start_date += " 00:00:00"
+    if end_date:
+        end_date += " 23:59:59"
+
+    results = search_messages(conv_id, query, start_date, end_date)
+    emit('search_results', {'results': results, 'query': query})
+
+@socketio.on('add_reaction')
+def handle_add_reaction(data):
+    message_id = data.get('message_id')
+    emoji = data.get('emoji')
+
+    if not message_id or not emoji:
+        return
+
+    msg = get_message(message_id)
+    if not msg:
+        return
+
+    current_reactions = json.loads(msg.get('reactions', '[]'))
+    
+    # Check if emoji already exists in reactions, if not, add it
+    # For now, we'll assume a single reaction type from the reaction picker.
+    # If multiple reactions per user are needed, a more complex data structure is required.
+    if emoji not in current_reactions:
+        current_reactions.append(emoji)
+    
+    update_message_reactions(message_id, current_reactions)
+    
+    # Notify all clients in the room about the updated reaction
+    socketio.emit('reaction_updated', {
+        'message_id': message_id,
+        'reactions': current_reactions
+    }, room=str(msg['conversation_id']))
+
+    # AI potentially responds to the reaction if it was its message
+    if msg['role'] == 'assistant' and random.random() < 0.35: # 35% chance to respond
+        conv_id = msg['conversation_id']
+        ai_response_action = get_reaction_response_message(conv_id, msg['content'], emoji)
+        if ai_response_action:
+            # Short delay to simulate AI processing the reaction
+            socketio.sleep(random.uniform(1.0, 3.0)) 
+            send_proactive_ai_message(conv_id, ai_response_action)
+
 def delayed_online_status_task(conv_id):
     """
     Waits for a realistic delay based on AI's busy status, then emits online presence.
@@ -590,10 +1159,31 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
         conv = get_conversation(conv_id)
         if not conv: return
 
+        current_mood = conv.get('mood', 70)
+
+        # --- Dynamic Mood Change based on conversation ---
+        mood_suggestion = get_mood_change_suggestion(conv_id, user_message, current_mood)
+        if mood_suggestion and mood_suggestion['new_mood'] != current_mood:
+            new_mood = mood_suggestion['new_mood']
+            update_conversation(conv_id, mood=new_mood)
+            socketio.emit('mood_updated', {'conv_id': conv_id, 'new_mood': new_mood})
+            # Update local conv object with new mood for current response generation
+            conv['mood'] = new_mood
+            print(f"😊 Mood for conv {conv_id} changed from {current_mood} to {new_mood}. Reason: {mood_suggestion.get('reason', 'N/A')}")
+        # --- End Dynamic Mood Change ---
+
         # --- PHASE 1: HUMAN READING BEHAVIOR (SEEN) ---
         # Simulate time to pick up phone/read message
         # Fast if online recently, slower if not
         read_delay = random.uniform(0.5, 2.5)
+        # Apply busy status influence to read_delay
+        if conv.get('busy_status') in ['Học chính khóa', 'Đi tắm', 'Đi xem phim với bạn', 'Đang ngủ']:
+            read_delay = random.uniform(10, 60) # Much longer if doing specific, immersive activities
+        elif conv.get('busy_status') == 'Đang ốm':
+            read_delay = random.uniform(5, 30) # Slower if sick
+        
+        read_delay = min(read_delay, 120) # Cap read_delay to 2 minutes max to avoid excessive waits
+
         socketio.sleep(read_delay)
 
         # Mark as SEEN (Updates DB and notifies Client to show small avatar)
@@ -619,11 +1209,52 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
             ghost_delay = random.uniform(0.5, 15.0)
 
         # Busy status impacts delay significantly
-        if busy_status != 'rảnh':
-             # If busy but decided to reply (filtered in get_ai_response), take longer
-             ghost_delay += random.uniform(3.0, 8.0)
+        if busy_status in ['Học chính khóa', 'Đi tắm', 'Đi xem phim với bạn', 'Đang ngủ']:
+             ghost_delay += random.uniform(30, 180) # Very long processing delay if deeply busy
+        elif busy_status == 'Đang ốm':
+            ghost_delay += random.uniform(10, 60) # Longer processing if sick
 
         socketio.sleep(ghost_delay)
+
+        # --- MICRO-EVENT INTERRUPTIONS (NEW) ---
+        micro_events = [
+            "Ơi, mẹ gọi tí nha",
+            "Đợi xíu, có người giao hàng",
+            "Tự nhiên đau bụng quá, đi toilet cái",
+            "Mạng lag quá xá, đợi tui xíu",
+            "Bạn rủ đi mua trà sữa liền, đợi xíuuu",
+            "Tí nha, đang xem clip hài",
+            "Có đứa vừa chọc mình, đang cãi lộn xíu",
+            "Ủa có tin nhắn mới của người khác, t rep cái nha"
+        ]
+        # Only trigger micro-event if AI is currently 'rảnh', awake, and not 'Đang ốm'
+        if conv.get('busy_status') == 'rảnh' and conv.get('sleep_status') == 'thức' and random.random() < 0.15: # 15% chance for a micro-event
+            interruption_message = random.choice(micro_events)
+            interruption_delay = random.uniform(10, 30) # Interruption lasts 10-30 seconds
+
+            # Send interruption message (simulate typing, then message)
+            print(f"🎉 Micro-event for conv {conv_id}: {interruption_message}")
+            socketio.emit('typing_start', room=str(conv_id))
+            socketio.sleep(len(interruption_message) * random.uniform(0.06, 0.1) + random.uniform(0.5, 1.0)) # Simulate typing interruption
+            socketio.emit('typing_stop', room=str(conv_id))
+            
+            ai_msg_id = save_message(conv_id, 'assistant', ai_name, interruption_message)
+            socketio.emit('new_message', {
+                'id': ai_msg_id,
+                'role': 'assistant',
+                'sender_name': ai_name,
+                'content': interruption_message,
+                'timestamp': datetime.now(GMT7).strftime('%Y-%m-%d %H:%M:%S'),
+                'is_seen': 0,
+                'reactions': '[]'
+            }, room=str(conv_id))
+            # Update conversation list to show this interruption message
+            socketio.emit('conversations_updated', {'conversations': get_all_conversations()}) 
+            
+            socketio.sleep(interruption_delay) # Actual interruption delay
+
+            # After the interruption, AI should probably 're-read' the message again for context
+            socketio.sleep(random.uniform(1.0, 2.0)) # Small delay after interruption before processing
 
         # --- PHASE 3: GENERATE CONTENT ---
         # 1. Get AI response (The thinking part)
@@ -693,8 +1324,9 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
                     'role': 'assistant',
                     'sender_name': ai_name,
                     'content': msg,
-                    'timestamp': datetime.now(GMT7).strftime('%H:%M'),
-                    'is_seen': 0
+                    'timestamp': datetime.now(GMT7).strftime('%Y-%m-%d %H:%M:%S'),
+                    'is_seen': 0,
+                    'reactions': '[]'
                 }, room=str(conv_id))
                 any_message_sent = True
 
@@ -712,6 +1344,9 @@ def delayed_ai_response_task(conv_id, user_message, ai_name, user_msg_id):
             socketio.emit('conversations_updated', {
                 'conversations': get_all_conversations()
             })
+            # Clear last_busy_reason after AI has responded (if it was set)
+            if conv.get('last_busy_reason'):
+                update_conversation(conv_id, last_busy_reason=None)
 
     except Exception as e:
         print(f"❌ AI Error in delayed_ai_response_task: {e}")
