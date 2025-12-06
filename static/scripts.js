@@ -109,13 +109,17 @@ document.addEventListener('DOMContentLoaded', () => {
         resultCardContainer.className = result.is_dangerous ? 'dangerous' : 'safe';
         
         const statusText = result.is_dangerous ? "CẢNH BÁO NGUY HIỂM" : "TÍN HIỆU AN TOÀN";
+
+        // Clean up excessive newlines from the AI's response
+        const cleanReason = (result.reason || 'Không có').trim().replace(/(\r\n|\n|\r){3,}/g, '\n\n');
+        const cleanRecommend = (result.recommend || 'Không có').trim().replace(/(\r\n|\n|\r){3,}/g, '\n\n');
         
         const resultHTML = `
             <h2 id="result-status">${statusText}</h2>
             <div class="result-details">
                 <ul>
-                    <li><span class="label">//:Lý do:</span> ${result.reason || 'Không có'}</li>
-                    <li><span class="label">//:Khuyến cáo:</span> ${result.recommend || 'Không có'}</li>
+                    <li><span class="label">//:Lý do:</span> ${cleanReason}</li>
+                    <li><span class="label">//:Khuyến cáo:</span> ${cleanRecommend}</li>
                     <li><span class="label">//:Phân loại:</span> ${result.types || 'Không xác định'}</li>
                     <li><span class="label">//:Mức độ rủi ro:</span> ${result.score || 0} / 5</li>
                 </ul>

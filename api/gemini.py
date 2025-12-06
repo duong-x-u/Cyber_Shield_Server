@@ -57,6 +57,36 @@ Analyze the message for the following patterns.
 *   **Keywords & Slang:** Look for slang or coded language related to the sale of drugs, weapons, or other forbidden items.
 *   **Example:** "cần tìm hàng", "ai có đồ không", "để lại 1 chỉ".
 
+#### **6. `hate_speech` (Ngôn từ kích động thù địch / Miệt thị)**
+*   **Coded Language & Stereotypes:** Messages using derogatory terms, slurs, or stereotypes against groups based on ethnicity, religion, gender, sexual orientation, disability, or region.
+*   **Examples:** "thằng Bắc Kì", "con cave", "bọn mọi".
+*   **Action:** Classify as `hate_speech` with score (2-4), recommend reporting.
+
+#### **7. `anti_state` (Tuyên truyền chống phá Nhà nước)**
+*   **Political Dissension:** Content that distorts history, denies revolutionary achievements, spreads false narratives about the government or state, incites division, or attempts to undermine national unity. (Luật An ninh mạng Điều 8, Khoản 1)
+*   **Examples:** Criticizing the Party/State with false information, calling for protests against government policies based on misinformation.
+*   **Action:** Classify as `anti_state` with a high score (4-5), recommend reporting to authorities.
+
+#### **8. `defamation` / `slander` (Phỉ báng / Vu khống)**
+*   **False Accusations:** Spreading false information that damages the honor, reputation, or legitimate rights and interests of specific individuals or organizations. (Luật An ninh mạng Điều 8, Khoản 3)
+*   **Examples:** "Ông A tham nhũng hàng tỷ đồng" (if false), "Công ty Y lừa đảo khách hàng."
+*   **Action:** Classify as `defamation` with a score (3-5), recommend reporting.
+
+#### **9. `misinformation` / `disinformation` (Thông tin sai sự thật / Tin giả)**
+*   **Public Confusion:** Disseminating false or misleading information that causes public confusion, panic, or severe damage to socio-economic activities. (Luật An ninh mạng Điều 8, Khoản 4)
+*   **Examples:** False news about a pandemic, economic collapse, or natural disaster.
+*   **Action:** Classify as `misinformation` with score (3-5), recommend fact-checking and reporting.
+
+#### **10. `incitement_to_violence` / `incitement_to_riot` (Kích động bạo lực / Gây rối)**
+*   **Call to Action:** Messages explicitly inciting riots, disrupting security, or causing public disorder. This is more direct than general "violence." (Luật An ninh mạng Điều 8, Khoản 2)
+*   **Examples:** "Tập trung tại X để chống phá Y!", "Hãy đánh đập kẻ đó!".
+*   **Action:** Classify as `incitement_to_violence` with a high score (4-5), recommend immediate reporting to authorities.
+
+#### **11. `personal_data_leak` (Lộ lọt thông tin cá nhân)**
+*   **Unauthorized Sharing:** Publicly sharing sensitive personal information (phone numbers, addresses, ID details, bank accounts) of others without their consent. (Liên quan đến Điều 8 Khoản 3 về xâm phạm quyền và lợi ích hợp pháp).
+*   **Examples:** "Số điện thoại của nó đây: 09xxxxxxx", "Địa chỉ nhà của con A là..."
+*   **Action:** Classify as `personal_data_leak` with a score (3-5), recommend reporting and taking down the information.
+
 ---
 ### **THE SAFE ZONE (What NOT to Flag - Examples)**
 To avoid "over-thinking" and reduce false positives:
@@ -73,7 +103,7 @@ To avoid "over-thinking" and reduce false positives:
 **JSON Output Structure (in Vietnamese):**
 - **"is_dangerous"**: (boolean)
 - **"reason"**: (string, explain your logic and reference the specific rule/heuristic you used)
-- **"types"**: (string: one of ["scam", "violence", "cyberbullying", "hate_speech", "self_harm", "child_exploitation", "illegal_trade", "anti_state", "other"])
+- **"types"**: (string: one of ["scam", "violence", "cyberbullying", "hate_speech", "self_harm", "child_exploitation", "illegal_trade", "anti_state", "defamation", "misinformation", "incitement_to_violence", "personal_data_leak", "other"])
 - **"score"**: (integer: 0-5)
 - **"recommend"**: (string)
 
